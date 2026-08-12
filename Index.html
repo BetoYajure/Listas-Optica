@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestión de Cristales - Óptica</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- Navegación Superior -->
+  <nav class="bg-blue-900 text-white p-4 shadow-md flex justify-between items-center flex-wrap gap-2">
+    <h1 class="font-bold text-lg">Óptica - Control de Pedidos</h1>
+    <div class="flex gap-2 text-sm">
+      <button onclick="verPestana('vendedor')" class="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded font-semibold">Sucursales</button>
+      <button onclick="verPestana('bodega')" class="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded font-semibold">Punto Óptico</button>
+      <button onclick="verPestana('central')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded font-semibold">Oficina Central</button>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto p-4">
+
+    <!-- PESTAÑA 1: INGRESO VENDEDORAS -->
+    <div id="view-vendedor" class="view-panel">
+      <div class="bg-white p-6 rounded-xl shadow border border-slate-200 max-w-xl mx-auto">
+        <h2 class="text-xl font-bold text-slate-800 mb-4">Ingreso de Pedidos (Sucursales)</h2>
+        <form id="formPedido" onsubmit="guardarPedido(event, false)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Sucursal</label>
+            <select id="sucursal" required class="w-full p-2.5 bg-slate-50 border rounded-lg">
+              <option value="" disabled selected>Seleccionar sucursal</option>
+              <option value="Libertad">Libertad</option>
+              <option value="Villanelo">Villanelo</option>
+              <option value="Local Nuevo">Local Nuevo</option>
+              <option value="Quilpué">Quilpué</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">N° de Orden / Cliente</label>
+            <input type="text" id="orden" placeholder="Ej: ORD-2024" required class="w-full p-2.5 bg-slate-50 border rounded-lg">
+          </div>
+
+          <!-- OD -->
+          <div class="border-t pt-3">
+            <h3 class="font-bold text-blue-600 text-sm mb-2">OJO DERECHO (OD)</h3>
+            <div class="grid grid-cols-3 gap-2">
+              <select id="trat_od" class="p-2 border rounded text-sm"><option>CAPA</option><option>BLUE CUT</option><option>FOTO CAFÉ</option><option>FOTO GRIS</option></select>
+              <input type="text" id="esf_od" placeholder="Esfera (-2.00)" required class="p-2 border rounded text-sm">
+              <input type="text" id="cil_od" placeholder="Cilindro (-0.50)" required class="p-2 border rounded text-sm">
+            </div>
+          </div>
+
+          <button type="button" onclick="copiarOD()" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-3 py-1 rounded">Copiar OD a OI</button>
+
+          <!-- OI -->
+          <div class="border-t pt-3">
+            <h3 class="font-bold text-blue-600 text-sm mb-2">OJO IZQUIERDO (OI)</h3>
+            <div class="grid grid-cols-3 gap-2">
+              <select id="trat_oi" class="p-2 border rounded text-sm"><option>CAPA</option><option>BLUE CUT</option><option>FOTO CAFÉ</option><option>FOTO GRIS</option></select>
+              <input type="text" id="esf_oi" placeholder="Esfera (-2.00)" required class="p-2 border rounded text-sm">
+              <input type="text" id="cil_oi" placeholder="Cilindro (-0.50)" required class="p-2 border rounded text-sm">
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow">Enviar Pedido</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- PESTAÑA 2: PUNTO ÓPTICO (BODEGA CON VISTA GLOBAL) -->
+    <div id="view-bodega" class="view-panel hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Stock de Bodega -->
+        <div class="bg-white p-5 rounded-xl shadow border border-slate-200">
+          <h2 class="text-lg font-bold text-slate-800 mb-1">📦 Cristales en Stock (Para Armar)</h2>
+          <p class="text-xs text-slate-500 mb-3">Buscar en estantes y enviar a Oficina Central.</p>
+          <div id="listaBodega" class="space-y-3">Cargando pedidos...</div>
+        </div>
+
+        <!-- Vista de Compras Externas en Punto Óptico -->
+        <div class="bg-slate-50 p-5 rounded-xl shadow border border-slate-300">
+          <h2 class="text-lg font-bold text-red-700 mb-1">🛒 Compras Externas (Para Conocimiento/Apoyo)</h2>
+          <p class="text-xs text-slate-500 mb-3">Lista de pedidos sin stock por si deben salir a comprar fuera.</p>
+          <div id="listaBodegaCompras" class="space-y-3">Cargando compras externas...</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- PESTAÑA 3: OFICINA CENTRAL (CONTROL TOTAL Y FALTANTES) -->
+    <div id="view-central" class="view-panel hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- COLUMNA IZQUIERDA: Recepción de Bodega y Control -->
+        <div class="space-y-6">
+          <div class="bg-white p-5 rounded-xl shadow border border-slate-200">
+            <h2 class="text-lg font-bold text-blue-900 mb-1">📦 1. Recepción desde Punto Óptico</h2>
+            <p class="text-xs text-slate-500 mb-3">Cristales en camino de bodega para armado final.</p>
+            <div id="centralListaBodega" class="space-y-3">Cargando lista de bodega...</div>
+          </div>
+
+          <!-- Control de Stock (Agotar Cristales) -->
+          <div class="bg-white p-5 rounded-xl shadow border border-slate-200">
+            <h2 class="text-sm font-bold text-slate-800 mb-2">⚙️ Marcar Cristal como AGOTADO</h2>
+            <div class="flex gap-2">
+              <select id="st_trat" class="p-1.5 border rounded text-xs"><option>CAPA</option><option>BLUE CUT</option><option>FOTO CAFÉ</option><option>FOTO GRIS</option></select>
+              <input type="text" id="st_esf" placeholder="Esf (-0.75)" class="p-1.5 border rounded text-xs w-24">
+              <input type="text" id="st_cil" placeholder="Cil (0.00)" class="p-1.5 border rounded text-xs w-24">
+              <button onclick="marcarAgotado()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded text-xs">Agotar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: Compras Externas e Ingreso de Faltantes -->
+        <div class="space-y-6">
+          
+          <!-- Lista de Compras Externas -->
+          <div class="bg-white p-5 rounded-xl shadow border border-slate-200">
+            <h2 class="text-lg font-bold text-red-700 mb-1">🛒 2. Lista Global de Compras Externas</h2>
+            <p class="text-xs text-slate-500 mb-3">Cristales a comprar con proveedores.</p>
+            <div id="listaComprasExternas" class="space-y-3">Cargando compras necesarias...</div>
+          </div>
+
+          <!-- Formulario Directo e Ingreso de Faltantes -->
+          <div class="bg-amber-50 p-5 rounded-xl shadow border border-amber-200">
+            <h2 class="text-md font-bold text-amber-900 mb-1">⚠️ 3. Ingreso Rápido de Faltantes</h2>
+            <p class="text-xs text-amber-700 mb-3">Crear registro urgente desde Oficina Central.</p>
+            
+            <form onsubmit="guardarPedido(event, true)" class="space-y-2">
+              <input type="text" id="orden_faltante" placeholder="N° Orden o Nombre Cliente" required class="w-full p-2 border rounded bg-white text-xs">
+              
+              <div class="grid grid-cols-3 gap-1">
+                <select id="trat_od_f" class="p-1.5 border rounded text-xs"><option>CAPA</option><option>BLUE CUT</option><option>FOTO CAFÉ</option><option>FOTO GRIS</option></select>
+                <input type="text" id="esf_od_f" placeholder="OD Esf" required class="p-1.5 border rounded text-xs">
+                <input type="text" id="cil_od_f" placeholder="OD Cil" required class="p-1.5 border rounded text-xs">
+              </div>
+
+              <div class="grid grid-cols-3 gap-1">
+                <select id="trat_oi_f" class="p-1.5 border rounded text-xs"><option>CAPA</option><option>BLUE CUT</option><option>FOTO CAFÉ</option><option>FOTO GRIS</option></select>
+                <input type="text" id="esf_oi_f" placeholder="OI Esf" required class="p-1.5 border rounded text-xs">
+                <input type="text" id="cil_oi_f" placeholder="OI Cil" required class="p-1.5 border rounded text-xs">
+              </div>
+
+              <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs w-full mt-2">Agregar a Lista de Faltantes</button>
+            </form>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Conexión a Supabase
+    const SUPABASE_URL = 'https://seexpuoeexbiwrtwgyrl.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_yS4E32rn18EbV7etczrWmg_nixka3Wx';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function verPestana(nombre) {
+      document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`view-${nombre}`).classList.remove('hidden');
+      if (nombre === 'bodega') cargarBodega();
+      if (nombre === 'central') cargarOficinaCentral();
+    }
+
+    function copiarOD() {
+      document.getElementById('trat_oi').value = document.getElementById('trat_od').value;
+      document.getElementById('esf_oi').value = document.getElementById('esf_od').value;
+      document.getElementById('cil_oi').value = document.getElementById('cil_od').value;
+    }
+
+    async function guardarPedido(e, esFaltante) {
+      e.preventDefault();
+      const pref = esFaltante ? '_f' : '';
+      
+      const sucursal = esFaltante ? 'Oficina Central (Faltante)' : document.getElementById('sucursal').value;
+      const orden = esFaltante ? document.getElementById('orden_faltante').value : document.getElementById('orden').value;
+      
+      const od = {
+        trat: document.getElementById(`trat_od${pref}`).value,
+        esf: document.getElementById(`esf_od${pref}`).value,
+        cil: document.getElementById(`cil_od${pref}`).value
+      };
+      const oi = {
+        trat: document.getElementById(`trat_oi${pref}`).value,
+        esf: document.getElementById(`esf_oi${pref}`).value,
+        cil: document.getElementById(`cil_oi${pref}`).value
+      };
+
+      const resOD = await consultarDisponibilidad(od.trat, od.esf, od.cil);
+      const resOI = await consultarDisponibilidad(oi.trat, oi.esf, oi.cil);
+
+      const { error } = await _supabase.from('pedidos').insert([{
+        sucursal,
+        orden,
+        tratamiento_od: od.trat, esfera_od: od.esf, cilindro_od: od.cil,
+        tratamiento_oi: oi.trat, esfera_oi: oi.esf, cilindro_oi: oi.cil,
+        estado_od: resOD ? 'Stock' : 'Compra Externa',
+        estado_oi: resOI ? 'Stock' : 'Compra Externa',
+        es_faltante: esFaltante
+      }]);
+
+      if (error) alert('Error guardando pedido: ' + error.message);
+      else {
+        alert(esFaltante ? '⚠️ Faltante registrado en la lista' : '¡Pedido Registrado!');
+        e.target.reset();
+        if (esFaltante) cargarOficinaCentral();
+      }
+    }
+
+    async function consultarDisponibilidad(trat, esf, cil) {
+      const { data } = await _supabase.from('stock_disponibilidad')
+        .select('disponible')
+        .eq('tratamiento', trat).eq('esfera', esf).eq('cilindro', cil);
+      if (data && data.length > 0) return data[0].disponible;
+      return true;
+    }
+
+    async function marcarAgotado() {
+      const trat = document.getElementById('st_trat').value;
+      const esf = document.getElementById('st_esf').value;
+      const cil = document.getElementById('st_cil').value;
+
+      await _supabase.from('stock_disponibilidad').insert([{ tratamiento: trat, esfera: esf, cilindro: cil, disponible: false }]);
+      alert(`Cristal ${trat} ${esf} ${cil} marcado como AGOTADO`);
+    }
+
+    async function cargarBodega() {
+      const { data } = await _supabase.from('pedidos').select('*').eq('completado', false);
+      const contenedor = document.getElementById('listaBodega');
+      const contenedorCompras = document.getElementById('listaBodegaCompras');
+      
+      contenedor.innerHTML = '';
+      contenedorCompras.innerHTML = '';
+
+      if(!data || data.length === 0) {
+        contenedor.innerHTML = '<p class="text-xs text-slate-400">No hay pedidos pendientes.</p>';
+        contenedorCompras.innerHTML = '<p class="text-xs text-slate-400">No hay compras externas pendientes.</p>';
+        return;
+      }
+
+      data.forEach(p => {
+        // Cristales para armar desde Stock
+        if (p.estado_od === 'Stock' || p.estado_oi === 'Stock') {
+          contenedor.innerHTML += `
+            <div class="p-3 border rounded bg-slate-50 ${p.es_faltante ? 'border-amber-400 bg-amber-50' : ''}">
+              <div class="flex justify-between font-bold text-xs">
+                <span>${p.sucursal} - Ord: ${p.orden}</span>
+                ${p.es_faltante ? '<span class="text-amber-800 font-bold">⚠️ FALTANTE URGENTE</span>' : ''}
+              </div>
+              <div class="text-xs text-slate-600 mt-1">
+                ${p.estado_od === 'Stock' ? `<b>OD:</b> ${p.tratamiento_od} (${p.esfera_od} / ${p.cilindro_od})<br>` : ''}
+                ${p.estado_oi === 'Stock' ? `<b>OI:</b> ${p.tratamiento_oi} (${p.esfera_oi} / ${p.cilindro_oi})` : ''}
+              </div>
+            </div>`;
+        }
+
+        // Cristales para Compras Externas (Visibilidad de Bodega)
+        if (p.estado_od === 'Compra Externa' || p.estado_oi === 'Compra Externa') {
+          contenedorCompras.innerHTML += `
+            <div class="p-2.5 border border-red-200 bg-white rounded text-xs">
+              <div class="flex justify-between font-bold text-red-800">
+                <span>${p.sucursal} - Ord: ${p.orden}</span>
+                ${p.es_faltante ? '<span class="text-amber-800">⚠️ Faltante</span>' : ''}
+              </div>
+              <div class="text-slate-600 mt-1">
+                ${p.estado_od === 'Compra Externa' ? `<b>OD:</b> ${p.tratamiento_od} (${p.esfera_od} / ${p.cilindro_od})<br>` : ''}
+                ${p.estado_oi === 'Compra Externa' ? `<b>OI:</b> ${p.tratamiento_oi} (${p.esfera_oi} / ${p.cilindro_oi})` : ''}
+              </div>
+            </div>`;
+        }
+      });
+    }
+
+    async function cargarOficinaCentral() {
+      const { data } = await _supabase.from('pedidos').select('*').eq('completado', false);
+      
+      const contenedorBodega = document.getElementById('centralListaBodega');
+      const contenedorCompras = document.getElementById('listaComprasExternas');
+      
+      contenedorBodega.innerHTML = '';
+      contenedorCompras.innerHTML = '';
+
+      if(!data || data.length === 0) {
+        contenedorBodega.innerHTML = '<p class="text-xs text-slate-400">Sin pedidos de bodega.</p>';
+        contenedorCompras.innerHTML = '<p class="text-xs text-slate-400">Sin compras externas pendientes.</p>';
+        return;
+      }
+
+      data.forEach(p => {
+        if (p.estado_od === 'Stock' || p.estado_oi === 'Stock') {
+          contenedorBodega.innerHTML += `
+            <div class="p-2.5 border rounded bg-slate-50 text-xs ${p.es_faltante ? 'border-amber-400 bg-amber-50' : ''}">
+              <div class="flex justify-between font-bold">
+                <span>${p.sucursal} - Ord: ${p.orden}</span>
+                ${p.es_faltante ? '<span class="text-amber-800">⚠️ Faltante</span>' : ''}
+              </div>
+              <div class="text-slate-600 mt-1">
+                ${p.estado_od === 'Stock' ? `<b>OD:</b> ${p.tratamiento_od} (${p.esfera_od} / ${p.cilindro_od})<br>` : ''}
+                ${p.estado_oi === 'Stock' ? `<b>OI:</b> ${p.tratamiento_oi} (${p.esfera_oi} / ${p.cilindro_oi})` : ''}
+              </div>
+            </div>`;
+        }
+
+        if (p.estado_od === 'Compra Externa' || p.estado_oi === 'Compra Externa') {
+          contenedorCompras.innerHTML += `
+            <div class="p-2.5 border border-red-200 bg-red-50 rounded text-xs">
+              <div class="flex justify-between font-bold text-red-900">
+                <span>${p.sucursal} - Ord: ${p.orden}</span>
+                ${p.es_faltante ? '<span class="text-amber-800">⚠️ Faltante</span>' : ''}
+              </div>
+              <div class="text-red-700 mt-1">
+                ${p.estado_od === 'Compra Externa' ? `<b>OD:</b> ${p.tratamiento_od} (${p.esfera_od} / ${p.cilindro_od})<br>` : ''}
+                ${p.estado_oi === 'Compra Externa' ? `<b>OI:</b> ${p.tratamiento_oi} (${p.esfera_oi} / ${p.cilindro_oi})` : ''}
+              </div>
+            </div>`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
