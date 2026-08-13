@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Óptica - Control de Listas de Cristales</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @media print {
+
+            /* Ocultar elementos de interfaz global */
+            nav,
+            button,
+            form,
+            .no-print,
+            input,
+            select,
+            #login-screen,
+            #modalConfirmacionAgotado,
+            #modalTransposicion,
+            .acciones-pedido,
+            #btnFlotanteTransposicion {
+                display: none !important;
+            }
+
+            /* Ocultar paneles inactivos o con clase .hidden */
+            .view-panel.hidden,
+            .view-panel:not(.print-target) {
+                display: none !important;
+            }
+
+            /* Ocultar contenedores especificos al imprimir individualmente */
+            .print-single-active .print-block:not(.print-target-single) {
+                display: none !important;
+            }
+
+            /* Ajustes de diseño para impresión */
+            body {
+                background-color: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            #main-content {
+                display: block !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .view-panel.print-target {
+                display: block !important;
+                width: 100% !important;
+            }
+
+            .shadow,
+            .shadow-md,
+            .shadow-2xl {
+                box-shadow: none !important;
+            }
+
+            .border {
+                border-color: #cbd5e1 !important;
+            }
+
+            /* Forzar que el grid de la sucursal ocupe todo el ancho al imprimir */
+            #view-sucursal .grid {
+                display: block !important;
+            }
+
+            #view-sucursal .md\:col-span-5 {
+                display: none !important;
+                /* Oculta formulario de ingreso al imprimir */
+            }
+
+            #view-sucursal .md\:col-span-7 {
+                width: 100% !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen text-slate-800 relative pb-16">
+
+    <!-- PANTALLA DE LOGIN -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 bg-opacity-95 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200">
+            <div class="text-center mb-6">
+                <h1 class="text-xl font-bold text-slate-900">👓 Control de Cristales</h1>
+                <p class="text-xs text-slate-500 mt-1">Selecciona tu sucursal o rol e ingresa la contraseña para
+                    acceder.</p>
+            </div>
+
+            <form onsubmit="iniciarSesion(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-slate-700">Sucursal / Perfil:</label>
+                    <select id="loginPerfil"
+                        class="w-full p-2.5 bg-slate-50 border rounded-lg text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Libertad">📍 Sucursal Libertad</option>
+                        <option value="Villanelo">📍 Sucursal Villanelo</option>
+                        <option value="Local Nuevo">📍 Sucursal Local Nuevo</option>
+                        <option value="Quilpué">📍 Sucursal Quilpué</option>
+                        <option value="bodega">📦 Punto Óptico (Bodega)</option>
+                        <option value="central">🏢 Oficina Central</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-slate-700">Contraseña de Acceso:</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required
+                        class="w-full p-2.5 bg-slate-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div id="loginError" class="text-xs text-red-600 font-bold hidden text-center">
+                    ❌ Contraseña incorrecta. Inténtalo de nuevo.
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-blue-900 hover:bg-blue-800 text-white font-bold py-2.5 rounded-lg shadow-md transition text-sm">
+                    Ingresar al Sistema
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- NAVEGACIÓN SUPERIOR -->
+    <nav id="navbar" class="bg-blue-900 text-white p-3 shadow-md flex justify-between items-center no-print hidden">
+        <div class="flex items-center gap-3">
+            <h1 class="font-bold text-base px-2">Óptica - Control de Cristales</h1>
+            <span id="perfilActivoBadge" class="text-xs bg-blue-700 text-white font-bold px-2.5 py-1 rounded-md">Perfil:
+                ...</span>
+            <span id="indicadorTurno" class="text-xs bg-amber-500 text-slate-900 font-bold px-2.5 py-1 rounded-md">Lista
+                Activa: ...</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="abrirModalTransposicion()"
+                class="bg-amber-500 hover:bg-amber-600 text-slate-900 text-xs font-bold px-3 py-1.5 rounded shadow flex items-center gap-1">
+                🔄 Transposición
+            </button>
+            <button onclick="cerrarSesion()"
+                class="bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-3 py-1.5 rounded shadow">
+                🔒 Cerrar Sesión
+            </button>
+        </div>
+    </nav>
+
+    <div id="main-content" class="max-w-6xl mx-auto p-4 hidden">
+
+        <!-- CONTENEDOR SUCURSALES -->
+        <div id="view-sucursal" class="view-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+
+                <!-- Formulario de Ingreso / Edición Sucursal -->
+                <div class="md:col-span-5 bg-white p-5 rounded-xl shadow border border-slate-200 no-print">
+                    <div class="flex justify-between items-center mb-1">
+                        <h2 class="text-lg font-bold text-blue-900" id="tituloSucursal">Ingreso de Pedidos</h2>
+                        <button type="button" id="btnCancelarEdicion" onclick="cancelarEdicion()"
+                            class="hidden text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold">Cancelar
+                            Edición</button>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3">Registra o edita pedidos antes del cierre de lista.</p>
+
+                    <form onsubmit="guardarPedidoSucursal(event)" class="space-y-4">
+                        <input type="hidden" id="sucursalActual" value="">
+                        <input type="hidden" id="pedidoIdEditar" value="">
+
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">N° de Orden / Nombre Cliente</label>
+                            <input type="text" id="orden" placeholder="Ej: ORD-2024 / Juan Pérez" required
+                                class="w-full p-2 bg-slate-50 border rounded text-sm">
+                        </div>
+
+                        <!-- OD -->
+                        <div class="border-t pt-3">
+                            <h3 class="font-bold text-blue-600 text-xs mb-2">OJO DERECHO (OD)</h3>
+                            <div class="grid grid-cols-3 gap-1.5">
+                                <select id="trat_od" class="p-1.5 border rounded text-xs">
+                                    <option>CAPA</option>
+                                    <option>BLUE CUT</option>
+                                    <option>FOTO CAFÉ</option>
+                                    <option>FOTO GRIS</option>
+                                    <option>FOTO LILA</option>
+                                    <option>POLICARBONATO</option>
+                                    <option>ORGÁNICO</option>
+                                </select>
+                                <input type="text" id="esf_od" placeholder="Esf (-2.00)" required
+                                    class="p-1.5 border rounded text-xs">
+                                <input type="text" id="cil_od" placeholder="Cil (-0.50)" required
+                                    class="p-1.5 border rounded text-xs">
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="copiarOD()"
+                            class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-2.5 py-1 rounded">Copiar
+                            OD a OI</button>
+
+                        <!-- OI -->
+                        <div class="border-t pt-3">
+                            <h3 class="font-bold text-blue-600 text-xs mb-2">OJO IZQUIERDO (OI)</h3>
+                            <div class="grid grid-cols-3 gap-1.5">
+                                <select id="trat_oi" class="p-1.5 border rounded text-xs">
+                                    <option>CAPA</option>
+                                    <option>BLUE CUT</option>
+                                    <option>FOTO CAFÉ</option>
+                                    <option>FOTO GRIS</option>
+                                    <option>FOTO LILA</option>
+                                    <option>POLICARBONATO</option>
+                                    <option>ORGÁNICO</option>
+                                </select>
+                                <input type="text" id="esf_oi" placeholder="Esf (-2.00)" required
+                                    class="p-1.5 border rounded text-xs">
+                                <input type="text" id="cil_oi" placeholder="Cil (-0.50)" required
+                                    class="p-1.5 border rounded text-xs">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btnSubmitForm"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow text-sm">
+                            Enviar a Lista
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Lista Sucursal -->
+                <div class="md:col-span-7 bg-white p-5 rounded-xl shadow border border-slate-200 print-area">
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800" id="tituloListaSucursal">Pedidos de la Sucursal
+                            </h2>
+                            <p class="text-xs text-slate-500">Solo se modifican/eliminan pedidos de la lista ABIERTA de
+                                hoy.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-semibold"
+                                id="cantPedidosSucursal">0 pedidos</span>
+                            <button onclick="imprimirVista('view-sucursal')"
+                                class="no-print bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs px-2.5 py-1 rounded shadow">
+                                🖨️ Imprimir Lista Global
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 my-3 p-2 bg-slate-50 border rounded text-xs no-print">
+                        <div>
+                            <label class="block text-[10px] text-slate-500 font-semibold">Seleccionar Fecha
+                                (DD/MM/AAAA):</label>
+                            <input type="date" id="fechaFiltroSucursal"
+                                onchange="cargarListaSucursal(perfilAutenticado)"
+                                class="w-full p-1 border rounded bg-white text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500 font-semibold">Seleccionar Lista:</label>
+                            <select id="filtroTurnoSucursal" onchange="cargarListaSucursal(perfilAutenticado)"
+                                class="w-full p-1 border rounded bg-white text-xs">
+                                <option value="ACTIVO">Lista Activa (Abierta)</option>
+                                <option value="Manana">Lista 15:00 hrs (Mañana)</option>
+                                <option value="Tarde">Lista 19:00 hrs (Tarde)</option>
+                                <option value="TODOS">Ver Todas</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="listaSucursal" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">Cargando pedidos...
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- PUNTO ÓPTICO (BODEGA) -->
+        <div id="view-bodega" class="view-panel hidden print-area">
+            <div
+                class="bg-blue-900 text-white p-4 rounded-xl shadow mb-6 flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h2 class="font-bold text-md">📦 Punto Óptico - Preparación Técnica de Cristales</h2>
+                    <p class="text-xs text-blue-200">Vista optimizada de empaque.</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <input type="date" id="fechaFiltroBodega" onchange="cargarBodega()"
+                        class="p-1.5 text-slate-800 rounded no-print">
+                    <button onclick="filtrarBodegaPorTurno('Manana')"
+                        class="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded font-semibold no-print">☀️ Lista 15:00
+                        hrs</button>
+                    <button onclick="filtrarBodegaPorTurno('Tarde')"
+                        class="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded font-semibold no-print">🌙 Lista 19:00
+                        hrs</button>
+                    <button onclick="imprimirVista('view-bodega')"
+                        class="no-print bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-3 py-1.5 rounded shadow">🖨️
+                        Imprimir Todo</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- BLOQUE BODEGA STOCK -->
+                <div class="bg-white p-5 rounded-xl shadow border border-slate-200 print-block" id="block-bodega-stock">
+                    <div class="flex justify-between items-center mb-1">
+                        <h2 class="text-lg font-bold text-slate-800">📦 Cristales Solicitados en Stock</h2>
+                        <div class="flex gap-1 no-print">
+                            <button onclick="imprimirSeccionIndividual('block-bodega-stock')"
+                                class="bg-slate-700 hover:bg-slate-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">🖨️
+                                Imprimir</button>
+                            <button onclick="exportarCSVSimple('listaBodega', 'Bodega_Stock')"
+                                class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">📥
+                                Excel</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3" id="subtituloBodegaStock">Filtrando por Lista...</p>
+                    <div id="listaBodega" class="space-y-3">Cargando cristales...</div>
+                </div>
+
+                <!-- BLOQUE BODEGA COMPRAS -->
+                <div class="bg-slate-50 p-5 rounded-xl shadow border border-slate-300 print-block"
+                    id="block-bodega-compras">
+                    <div class="flex justify-between items-center mb-1">
+                        <h2 class="text-lg font-bold text-red-700">🛒 Cristales para Compras Externas</h2>
+                        <div class="flex gap-1 no-print">
+                            <button onclick="imprimirSeccionIndividual('block-bodega-compras')"
+                                class="bg-slate-700 hover:bg-slate-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">🖨️
+                                Imprimir</button>
+                            <button onclick="exportarCSVSimple('listaBodegaCompras', 'Bodega_Compras')"
+                                class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">📥
+                                Excel</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3" id="subtituloBodegaCompras">Filtrando por Lista...</p>
+                    <div id="listaBodegaCompras" class="space-y-3">Cargando compras...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OFICINA CENTRAL -->
+        <div id="view-central" class="view-panel hidden print-area">
+            <div
+                class="bg-amber-900 text-white p-4 rounded-xl shadow mb-6 flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h2 class="font-bold text-md">🏢 Oficina Central - Control Total e Inspección</h2>
+                    <p class="text-xs text-amber-200">Gestión global de pedidos y estado de listas.</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <input type="date" id="fechaFiltroCentral" onchange="cargarOficinaCentral()"
+                        class="p-1.5 text-slate-800 rounded no-print">
+                    <button onclick="filtrarCentralPorTurno('Manana')"
+                        class="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 rounded font-semibold no-print">☀️ Lista
+                        15:00 hrs</button>
+                    <button onclick="filtrarCentralPorTurno('Tarde')"
+                        class="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 rounded font-semibold no-print">🌙 Lista
+                        19:00 hrs</button>
+                    <button onclick="imprimirVista('view-central')"
+                        class="no-print bg-white text-amber-900 font-bold px-3 py-1.5 rounded shadow">🖨️ Imprimir
+                        Todo</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <div class="space-y-6">
+                    <!-- BLOQUE CENTRAL STOCK -->
+                    <div class="bg-white p-5 rounded-xl shadow border border-slate-200 print-block"
+                        id="block-central-stock">
+                        <div class="flex justify-between items-center mb-1">
+                            <h2 class="text-lg font-bold text-emerald-800">📦 1. Cristales a Traer de Punto Óptico
+                                (Stock)</h2>
+                            <div class="flex gap-1 no-print">
+                                <button onclick="imprimirSeccionIndividual('block-central-stock')"
+                                    class="bg-slate-700 hover:bg-slate-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">🖨️
+                                    Imprimir</button>
+                                <button onclick="exportarCSVSimple('centralListaStockTecnico', 'Central_Stock')"
+                                    class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">📥
+                                    Excel</button>
+                            </div>
+                        </div>
+                        <div id="centralListaStockTecnico" class="space-y-3">Cargando...</div>
+                    </div>
+
+                    <!-- BLOQUE CENTRAL COMPRAS -->
+                    <div class="bg-white p-5 rounded-xl shadow border border-slate-200 print-block"
+                        id="block-central-compras">
+                        <div class="flex justify-between items-center mb-1">
+                            <h2 class="text-lg font-bold text-red-700">🛒 2. Cristales a Comprar (Compras Externas)</h2>
+                            <div class="flex gap-1 no-print">
+                                <button onclick="imprimirSeccionIndividual('block-central-compras')"
+                                    class="bg-slate-700 hover:bg-slate-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">🖨️
+                                    Imprimir</button>
+                                <button onclick="exportarCSVSimple('centralListaComprasTecnicas', 'Central_Compras')"
+                                    class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">📥
+                                    Excel</button>
+                            </div>
+                        </div>
+                        <div id="centralListaComprasTecnicas" class="space-[3]">Cargando...</div>
+                    </div>
+
+                    <!-- MÓDULO MARCAR AGOTADO -->
+                    <div class="bg-white p-5 rounded-xl shadow border border-slate-200 no-print">
+                        <h2 class="text-xs font-bold text-slate-800 mb-2">⚙️ Gestión de Agotados e Inventario</h2>
+                        <div class="space-y-3">
+                            <div class="flex gap-2">
+                                <select id="st_trat" class="p-1.5 border rounded text-xs flex-1">
+                                    <option value="POLICARBONATO">POLICARBONATO</option>
+                                    <option value="BLUE CUT">BLUE CUT</option>
+                                    <option value="CAPA">CAPA</option>
+                                    <option value="FOTO LILA">FOTO LILA</option>
+                                    <option value="FOTO GRIS">FOTO GRIS</option>
+                                    <option value="FOTO CAFÉ">FOTO CAFÉ</option>
+                                    <option value="ORGÁNICO">ORGÁNICO</option>
+                                </select>
+                                <input type="text" id="st_esf" placeholder="Esf (-0.75)"
+                                    class="p-1.5 border rounded text-xs w-20">
+                                <input type="text" id="st_cil" placeholder="Cil (0.00)"
+                                    class="p-1.5 border rounded text-xs w-20">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="solicitarAgotado(false)"
+                                    class="bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-2 rounded text-xs">🚫
+                                    Agotar Dioptría</button>
+                                <button onclick="solicitarAgotado(true)"
+                                    class="bg-red-800 hover:bg-red-900 text-white font-bold px-2 py-2 rounded text-xs">⚠️
+                                    Agotar Material</button>
+                            </div>
+                            <hr class="my-2 border-slate-200">
+                            <button onclick="reponerStock()"
+                                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-xs">🔄
+                                Reponer Stock</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <!-- BLOQUE CENTRAL DESGLOSE CLIENTES -->
+                    <div class="bg-white p-5 rounded-xl shadow border border-slate-200 print-block"
+                        id="block-central-desglose">
+                        <div class="flex justify-between items-center mb-1">
+                            <h2 class="text-lg font-bold text-blue-900">📋 3. Desglose de Control (Órdenes / Clientes)
+                            </h2>
+                            <div class="flex gap-1 no-print">
+                                <button onclick="imprimirSeccionIndividual('block-central-desglose')"
+                                    class="bg-slate-700 hover:bg-slate-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">🖨️
+                                    Imprimir</button>
+                                <button onclick="exportarCSVSimple('centralListaDesgloseClientes', 'Central_Clientes')"
+                                    class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-2 py-1 rounded shadow">📥
+                                    Excel</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-3">Sujeto a correcciones antes del cierre.</p>
+                        <div id="centralListaDesgloseClientes" class="space-y-3">Cargando...</div>
+                    </div>
+
+                    <!-- INGRESO RÁPIDO DE FALTANTE -->
+                    <div class="bg-amber-50 p-5 rounded-xl shadow border border-amber-200 no-print">
+                        <h2 class="text-md font-bold text-amber-900 mb-2">⚠️ 4. Ingreso Rápido de Faltante</h2>
+                        <form onsubmit="guardarFaltanteCentral(event)" class="space-y-2">
+                            <input type="text" id="orden_faltante" placeholder="N° Orden o Nombre Cliente" required
+                                class="w-full p-2 border rounded bg-white text-xs">
+                            <div class="grid grid-cols-3 gap-1">
+                                <select id="trat_od_f" class="p-1.5 border rounded text-xs">
+                                    <option>CAPA</option>
+                                    <option>BLUE CUT</option>
+                                    <option>FOTO CAFÉ</option>
+                                    <option>FOTO GRIS</option>
+                                    <option>FOTO LILA</option>
+                                    <option>POLICARBONATO</option>
+                                    <option>ORGÁNICO</option>
+                                </select>
+                                <input type="text" id="esf_od_f" placeholder="OD Esf" required
+                                    class="p-1.5 border rounded text-xs">
+                                <input type="text" id="cil_od_f" placeholder="OD Cil" required
+                                    class="p-1.5 border rounded text-xs">
+                            </div>
+                            <div class="grid grid-cols-3 gap-1">
+                                <select id="trat_oi_f" class="p-1.5 border rounded text-xs">
+                                    <option>CAPA</option>
+                                    <option>BLUE CUT</option>
+                                    <option>FOTO CAFÉ</option>
+                                    <option>FOTO GRIS</option>
+                                    <option>FOTO LILA</option>
+                                    <option>POLICARBONATO</option>
+                                    <option>ORGÁNICO</option>
+                                </select>
+                                <input type="text" id="esf_oi_f" placeholder="OI Esf" required
+                                    class="p-1.5 border rounded text-xs">
+                                <input type="text" id="cil_oi_f" placeholder="OI Cil" required
+                                    class="p-1.5 border rounded text-xs">
+                            </div>
+                            <button type="submit"
+                                class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs w-full mt-2">Agregar
+                                Faltante a Lista</button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BOTÓN FLOTANTE PERMANENTE PARA TRANSPOSICIÓN -->
+    <button id="btnFlotanteTransposicion" onclick="abrirModalTransposicion()"
+        class="fixed bottom-4 right-4 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold p-3 rounded-full shadow-2xl flex items-center gap-2 border-2 border-white z-40 no-print transition hover:scale-105">
+        <span class="text-lg">🔄</span>
+        <span class="text-xs hidden md:inline">Transponer Cil (+)</span>
+    </button>
+
+    <!-- MODAL HERRAMIENTA INDEPENDIENTE TRANSPOSICIÓN -->
+    <div id="modalTransposicion"
+        class="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white rounded-2xl p-5 max-w-lg w-full shadow-2xl border border-slate-300">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">🔄 Herramienta de Transposición
+                    Cilindro (+)</h3>
+                <button onclick="cerrarModalTransposicion()"
+                    class="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">Calcula la equivalencia a cilindro negativo (-). Puedes enviar el
+                resultado al formulario de pedidos si estás en una Sucursal.</p>
+
+            <!-- OD Transposición -->
+            <div class="mb-3 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-amber-900">👁️ OJO DERECHO (OD):</span>
+                    <button type="button" onclick="limpiarTransposicionModal('od')"
+                        class="text-[10px] text-amber-700 underline">Limpiar OD</button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mb-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Esfera (+)</label>
+                        <input type="number" step="0.25" id="tr_esf_od" placeholder="+1.50"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Cilindro (+)</label>
+                        <input type="number" step="0.25" id="tr_cil_od" placeholder="+0.75"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Eje (°)</label>
+                        <input type="number" min="0" max="180" id="tr_eje_od" placeholder="10°"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center bg-white p-2 rounded border border-amber-200">
+                    <span id="res_tr_od" class="text-xs font-bold text-emerald-700">Resultado: --</span>
+                    <button type="button" onclick="aplicarTransposicionModal('od')"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded shadow">Usar
+                        en OD</button>
+                </div>
+            </div>
+
+            <!-- OI Transposición -->
+            <div class="mb-4 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-amber-900">👁️ OJO IZQUIERDO (OI):</span>
+                    <button type="button" onclick="limpiarTransposicionModal('oi')"
+                        class="text-[10px] text-amber-700 underline">Limpiar OI</button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mb-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Esfera (+)</label>
+                        <input type="number" step="0.25" id="tr_esf_oi" placeholder="+1.50"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Cilindro (+)</label>
+                        <input type="number" step="0.25" id="tr_cil_oi" placeholder="+0.75"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500">Eje (°)</label>
+                        <input type="number" min="0" max="180" id="tr_eje_oi" placeholder="175°"
+                            oninput="calcularTransposicionModal()" class="w-full p-1.5 border rounded text-xs bg-white">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center bg-white p-2 rounded border border-amber-200">
+                    <span id="res_tr_oi" class="text-xs font-bold text-emerald-700">Resultado: --</span>
+                    <button type="button" onclick="aplicarTransposicionModal('oi')"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded shadow">Usar
+                        en OI</button>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="cerrarModalTransposicion()"
+                    class="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-lg">Cerrar
+                    Herramienta</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMACIÓN DE AGOTADO -->
+    <div id="modalConfirmacionAgotado"
+        class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl border border-red-200">
+            <h3 class="text-base font-bold text-red-600 mb-2">⚠️ ¿Confirmar cambio de stock?</h3>
+            <p id="textoModalConfirmacion" class="text-xs text-slate-700 mb-3">Vas a marcar este cristal como Agotado.
+            </p>
+            <div class="flex gap-2 justify-end">
+                <button onclick="cerrarModalAgotado()"
+                    class="px-3 py-1.5 bg-slate-200 text-slate-700 font-bold rounded text-xs">Cancelar</button>
+                <button onclick="ejecutarAgotado()"
+                    class="px-3 py-1.5 bg-red-600 text-white font-bold rounded text-xs">Sí, marcar sin stock</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://seexpuoeexbiwrtwgyrl.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_yS4E32rn18EbV7etczrWmg_nixka3Wx';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const CLAVES_ACCESO = {
+            'Libertad': 'libertad123',
+            'Villanelo': 'villanelo123',
+            'Local Nuevo': 'localnuevo123',
+            'Quilpué': 'quilpue123',
+            'bodega': 'punto123',
+            'central': 'central123'
+        };
+
+        let perfilAutenticado = null;
+        let turnoFiltroBodega = 'Manana';
+        let turnoFiltroCentral = 'Manana';
+        let pendienteAgotar = null;
+
+        let calculosTransposicionModal = {
+            od: { esf: '', cil: '' },
+            oi: { esf: '', cil: '' }
+        };
+
+        function obtenerFechaHoy() { return new Date().toISOString().split('T')[0]; }
+        function obtenerTurnoActual() { return (new Date().getHours() < 15) ? 'Manana' : 'Tarde'; }
+
+        // Convierte YYYY-MM-DD a DD/MM/AAAA para presentación
+        function formatearFechaLatina(fechaISO) {
+            if (!fechaISO) return '';
+            const partes = fechaISO.split('-');
+            if (partes.length !== 3) return fechaISO;
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const hoy = obtenerFechaHoy();
+            document.getElementById('fechaFiltroSucursal').value = hoy;
+            document.getElementById('fechaFiltroBodega').value = hoy;
+            document.getElementById('fechaFiltroCentral').value = hoy;
+
+            const turnoActual = obtenerTurnoActual();
+            document.getElementById('indicadorTurno').innerText = `Lista Activa: ${turnoActual === 'Manana' ? '☀️ 15:00 hrs' : '🌙 19:00 hrs'}`;
+
+            const perfilGuardado = localStorage.getItem('optica_perfil');
+            if (perfilGuardado) activarPerfil(perfilGuardado);
+        });
+
+        // IMPRESIÓN GLOBAL DE VISTA
+        function imprimirVista(idVista) {
+            document.body.classList.remove('print-single-active');
+            document.querySelectorAll('.print-block').forEach(el => el.classList.remove('print-target-single'));
+            document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('print-target'));
+
+            const objetivo = document.getElementById(idVista);
+            if (objetivo) {
+                objetivo.classList.add('print-target');
+                window.print();
+            }
+        }
+
+        // IMPRESIÓN INDIVIDUAL DE SECCIÓN/BLOQUE
+        function imprimirSeccionIndividual(idBloque) {
+            const bloque = document.getElementById(idBloque);
+            if (!bloque) return;
+
+            const vistaPadre = bloque.closest('.view-panel');
+            if (!vistaPadre) return;
+
+            document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('print-target'));
+            document.querySelectorAll('.print-block').forEach(el => el.classList.remove('print-target-single'));
+
+            vistaPadre.classList.add('print-target');
+            bloque.classList.add('print-target-single');
+            document.body.classList.add('print-single-active');
+
+            window.print();
+
+            setTimeout(() => {
+                document.body.classList.remove('print-single-active');
+                bloque.classList.remove('print-target-single');
+            }, 500);
+        }
+
+        // EXPORTACIÓN A EXCEL (CSV)
+        function exportarCSVSimple(idContenedor, nombreArchivo) {
+            const el = document.getElementById(idContenedor);
+            if (!el) return;
+
+            let lineas = [];
+            const divs = el.querySelectorAll('.p-2, .p-2.5, .p-3, .border-b');
+
+            if (divs.length === 0) {
+                alert("No hay datos disponibles para exportar.");
+                return;
+            }
+
+            divs.forEach(div => {
+                let texto = div.innerText.replace(/\n+/g, ' | ').replace(/,/g, ' - ');
+                if (texto.trim().length > 0) {
+                    lineas.push(`"${texto.trim()}"`);
+                }
+            });
+
+            if (lineas.length === 0) {
+                alert("No hay elementos para exportar.");
+                return;
+            }
+
+            let fechaDDMMAAAA = formatearFechaLatina(obtenerFechaHoy());
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF" + `REPORTE: ${nombreArchivo} - FECHA: ${fechaDDMMAAAA}\n\n` + lineas.join("\n");
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `${nombreArchivo}_${fechaDDMMAAAA.replace(/\//g, '-')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // FUNCIONES DEL MODAL DE TRANSPOSICIÓN
+        function abrirModalTransposicion() {
+            document.getElementById('modalTransposicion').classList.remove('hidden');
+        }
+
+        function cerrarModalTransposicion() {
+            document.getElementById('modalTransposicion').classList.add('hidden');
+        }
+
+        function calcularTransposicionModal() {
+            ['od', 'oi'].forEach(ojo => {
+                const esf = parseFloat(document.getElementById(`tr_esf_${ojo}`).value);
+                const cil = parseFloat(document.getElementById(`tr_cil_${ojo}`).value);
+                const eje = parseInt(document.getElementById(`tr_eje_${ojo}`).value);
+
+                if (!isNaN(esf) && !isNaN(cil)) {
+                    const nuevaEsf = esf + cil;
+                    const nuevoCil = -Math.abs(cil);
+                    let nuevoEje = (!isNaN(eje)) ? ((eje <= 90) ? eje + 90 : eje - 90) : '';
+
+                    const txtEsf = nuevaEsf > 0 ? `+${nuevaEsf.toFixed(2)}` : nuevaEsf.toFixed(2);
+                    const txtCil = nuevoCil.toFixed(2);
+                    const txtEje = nuevoEje !== '' ? ` x ${nuevoEje}°` : '';
+
+                    document.getElementById(`res_tr_${ojo}`).innerText = `Resultado: ${txtEsf} ${txtCil}${txtEje}`;
+                    calculosTransposicionModal[ojo] = { esf: txtEsf, cil: txtCil };
+                } else {
+                    document.getElementById(`res_tr_${ojo}`).innerText = `Resultado: --`;
+                    calculosTransposicionModal[ojo] = { esf: '', cil: '' };
+                }
+            });
+        }
+
+        function aplicarTransposicionModal(ojo) {
+            const datos = calculosTransposicionModal[ojo];
+
+            if (!datos.esf || !datos.cil) {
+                alert('Ingresa esfera y cilindro (+) para calcular.');
+                return;
+            }
+
+            if (['Libertad', 'Villanelo', 'Local Nuevo', 'Quilpué'].includes(perfilAutenticado)) {
+                document.getElementById(`esf_${ojo}`).value = datos.esf;
+                document.getElementById(`cil_${ojo}`).value = datos.cil;
+                cerrarModalTransposicion();
+                alert(`✅ Valores aplicados a ${ojo.toUpperCase()} en el formulario de la lista.`);
+            } else {
+                alert(`Transposición calculada: Esfera ${datos.esf} | Cilindro ${datos.cil}`);
+            }
+        }
+
+        function limpiarTransposicionModal(ojo) {
+            document.getElementById(`tr_esf_${ojo}`).value = '';
+            document.getElementById(`tr_cil_${ojo}`).value = '';
+            document.getElementById(`tr_eje_${ojo}`).value = '';
+            calcularTransposicionModal();
+        }
+
+        function iniciarSesion(e) {
+            e.preventDefault();
+            const perfil = document.getElementById('loginPerfil').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            if (CLAVES_ACCESO[perfil] === pass) {
+                document.getElementById('loginError').classList.add('hidden');
+                localStorage.setItem('optica_perfil', perfil);
+                activarPerfil(perfil);
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem('optica_perfil');
+            perfilAutenticado = null;
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('navbar').classList.add('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        }
+
+        function activarPerfil(perfil) {
+            perfilAutenticado = perfil;
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('navbar').classList.remove('hidden');
+            document.getElementById('main-content').classList.remove('hidden');
+
+            const etiquetasPerfil = {
+                'Libertad': '📍 Sucursal Libertad',
+                'Villanelo': '📍 Sucursal Villanelo',
+                'Local Nuevo': '📍 Sucursal Local Nuevo',
+                'Quilpué': '📍 Sucursal Quilpué',
+                'bodega': '📦 Punto Óptico',
+                'central': '🏢 Oficina Central'
+            };
+
+            document.getElementById('perfilActivoBadge').innerText = etiquetasPerfil[perfil] || perfil;
+            document.querySelectorAll('.view-panel').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('print-target');
+            });
+
+            if (['Libertad', 'Villanelo', 'Local Nuevo', 'Quilpué'].includes(perfil)) {
+                document.getElementById('sucursalActual').value = perfil;
+                document.getElementById('tituloSucursal').innerText = `Ingreso de Pedidos - ${perfil}`;
+                document.getElementById('tituloListaSucursal').innerText = `Pedidos de ${perfil}`;
+                document.getElementById('view-sucursal').classList.remove('hidden');
+                cargarListaSucursal(perfil);
+            } else if (perfil === 'bodega') {
+                document.getElementById('view-bodega').classList.remove('hidden');
+                cargarBodega();
+            } else if (perfil === 'central') {
+                document.getElementById('view-central').classList.remove('hidden');
+                cargarOficinaCentral();
+            }
+        }
+
+        function copiarOD() {
+            document.getElementById('trat_oi').value = document.getElementById('trat_od').value;
+            document.getElementById('esf_oi').value = document.getElementById('esf_od').value;
+            document.getElementById('cil_oi').value = document.getElementById('cil_od').value;
+        }
+
+        async function consultarDisponibilidad(trat, esf, cil) {
+            try {
+                const { data, error } = await _supabase
+                    .from('agotados')
+                    .select('*')
+                    .eq('tratamiento', trat);
+
+                if (error || !data) return 'STOCK';
+
+                const esfNum = parseFloat(esf);
+                const cilNum = parseFloat(cil);
+
+                for (let item of data) {
+                    if (item.todo_el_material) return 'COMPRA';
+                    if (item.esfera !== null && item.cilindro !== null) {
+                        if (parseFloat(item.esfera) === esfNum && parseFloat(item.cilindro) === cilNum) {
+                            return 'COMPRA';
+                        }
+                    }
+                }
+                return 'STOCK';
+            } catch (err) {
+                console.error("Error al consultar disponibilidad:", err);
+                return 'STOCK';
+            }
+        }
+
+        async function guardarPedidoSucursal(e) {
+            e.preventDefault();
+            const sucursal = document.getElementById('sucursalActual').value;
+            const orden = document.getElementById('orden').value;
+            const idEditar = document.getElementById('pedidoIdEditar').value;
+            const turnoAsignado = obtenerTurnoActual();
+            const fechaHoy = obtenerFechaHoy();
+
+            const od = { trat: document.getElementById('trat_od').value, esf: document.getElementById('esf_od').value, cil: document.getElementById('cil_od').value };
+            const oi = { trat: document.getElementById('trat_oi').value, esf: document.getElementById('esf_oi').value, cil: document.getElementById('cil_oi').value };
+
+            const resOD = await consultarDisponibilidad(od.trat, od.esf, od.cil);
+            const resOI = await consultarDisponibilidad(oi.trat, oi.esf, oi.cil);
+
+            const payload = {
+                sucursal,
+                orden,
+                tratamiento_od: od.trat,
+                esfera_od: od.esf,
+                cilindro_od: od.cil,
+                origen_od: resOD,
+                tratamiento_oi: oi.trat,
+                esfera_oi: oi.esf,
+                cilindro_oi: oi.cil,
+                origen_oi: resOI,
+                fecha: fechaHoy,
+                turno: turnoAsignado
+            };
+
+            if (idEditar) {
+                const { error } = await _supabase.from('pedidos').update(payload).eq('id', idEditar);
+                if (error) alert("Error al actualizar pedido: " + error.message);
+                else cancelarEdicion();
+            } else {
+                const { error } = await _supabase.from('pedidos').insert([payload]);
+                if (error) alert("Error al ingresar pedido: " + error.message);
+            }
+
+            document.getElementById('orden').value = '';
+            cargarListaSucursal(sucursal);
+        }
+
+        function cancelarEdicion() {
+            document.getElementById('pedidoIdEditar').value = '';
+            document.getElementById('btnSubmitForm').innerText = 'Enviar a Lista';
+            document.getElementById('btnCancelarEdicion').classList.add('hidden');
+            document.getElementById('orden').value = '';
+        }
+
+        async function cargarListaSucursal(sucursal) {
+            const contenedor = document.getElementById('listaSucursal');
+            const fechaSel = document.getElementById('fechaFiltroSucursal').value;
+            const filtroTurno = document.getElementById('filtroTurnoSucursal').value;
+
+            contenedor.innerHTML = 'Cargando pedidos...';
+
+            let query = _supabase.from('pedidos').select('*').eq('sucursal', sucursal).eq('fecha', fechaSel);
+
+            if (filtroTurno === 'ACTIVO') {
+                query = query.eq('turno', obtenerTurnoActual());
+            } else if (filtroTurno !== 'TODOS') {
+                query = query.eq('turno', filtroTurno);
+            }
+
+            const { data, error } = await query.order('id', { ascending: false });
+
+            if (error) {
+                contenedor.innerHTML = `<p class="text-xs text-red-500">Error: ${error.message}</p>`;
+                return;
+            }
+
+            document.getElementById('cantPedidosSucursal').innerText = `${data.length} pedidos`;
+
+            if (data.length === 0) {
+                contenedor.innerHTML = `<p class="text-xs text-slate-400 italic">No hay pedidos registrados para esta selección.</p>`;
+                return;
+            }
+
+            contenedor.innerHTML = data.map(p => `
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs relative">
+          <div class="flex justify-between font-bold text-slate-800 border-b pb-1 mb-2">
+            <span>📋 Orden: ${p.orden}</span>
+            <span class="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">Turno: ${p.turno === 'Manana' ? '☀️ 15:00' : '🌙 19:00'} | Fecha: ${formatearFechaLatina(p.fecha)}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-white p-1.5 rounded border">
+              <span class="font-bold text-blue-800">OD:</span> ${p.tratamiento_od} Esf: ${p.esfera_od} Cil: ${p.cilindro_od}
+              <span class="block text-[9px] font-bold ${p.origen_od === 'COMPRA' ? 'text-red-600' : 'text-emerald-600'}">[${p.origen_od}]</span>
+            </div>
+            <div class="bg-white p-1.5 rounded border">
+              <span class="font-bold text-blue-800">OI:</span> ${p.tratamiento_oi} Esf: ${p.esfera_oi} Cil: ${p.cilindro_oi}
+              <span class="block text-[9px] font-bold ${p.origen_oi === 'COMPRA' ? 'text-red-600' : 'text-emerald-600'}">[${p.origen_oi}]</span>
+            </div>
+          </div>
+          <div class="mt-2 flex gap-2 justify-end acciones-pedido no-print">
+            <button onclick='prepararEdicion(${JSON.stringify(p)})' class="text-[10px] bg-amber-500 hover:bg-amber-600 text-slate-900 px-2 py-0.5 rounded font-bold">✏️ Editar</button>
+            <button onclick="eliminarPedido(${p.id})" class="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded font-bold">🗑️ Eliminar</button>
+          </div>
+        </div>
+      `).join('');
+        }
+
+        function prepararEdicion(pedido) {
+            document.getElementById('pedidoIdEditar').value = pedido.id;
+            document.getElementById('orden').value = pedido.orden;
+
+            document.getElementById('trat_od').value = pedido.tratamiento_od;
+            document.getElementById('esf_od').value = pedido.esfera_od;
+            document.getElementById('cil_od').value = pedido.cilindro_od;
+
+            document.getElementById('trat_oi').value = pedido.tratamiento_oi;
+            document.getElementById('esf_oi').value = pedido.esfera_oi;
+            document.getElementById('cil_oi').value = pedido.cilindro_oi;
+
+            document.getElementById('btnSubmitForm').innerText = '💾 Guardar Cambios';
+            document.getElementById('btnCancelarEdicion').classList.remove('hidden');
+        }
+
+        async function eliminarPedido(id) {
+            if (!confirm("¿Eliminar este pedido de la lista?")) return;
+            const { error } = await _supabase.from('pedidos').delete().eq('id', id);
+            if (error) alert("Error al eliminar: " + error.message);
+            else cargarListaSucursal(perfilAutenticado);
+        }
+
+        function filtrarBodegaPorTurno(turno) {
+            turnoFiltroBodega = turno;
+            cargarBodega();
+        }
+
+        async function cargarBodega() {
+            const fechaISO = document.getElementById('fechaFiltroBodega').value;
+            const fechaDDMMAAAA = formatearFechaLatina(fechaISO);
+            const subStock = document.getElementById('subtituloBodegaStock');
+            const subCompras = document.getElementById('subtituloBodegaCompras');
+
+            const tagTurno = turnoFiltroBodega === 'Manana' ? '☀️ 15:00 hrs' : '🌙 19:00 hrs';
+            subStock.innerText = `Lista: ${tagTurno} (${fechaDDMMAAAA})`;
+            subCompras.innerText = `Lista: ${tagTurno} (${fechaDDMMAAAA})`;
+
+            const { data, error } = await _supabase
+                .from('pedidos')
+                .select('*')
+                .eq('fecha', fechaISO)
+                .eq('turno', turnoFiltroBodega);
+
+            if (error) return;
+
+            let stockMap = {};
+            let comprasMap = {};
+
+            data.forEach(p => {
+                if (p.origen_od === 'STOCK') {
+                    let k = `${p.tratamiento_od} | Esf: ${p.esfera_od} | Cil: ${p.cilindro_od}`;
+                    stockMap[k] = (stockMap[k] || 0) + 1;
+                } else if (p.origen_od === 'COMPRA') {
+                    let k = `${p.tratamiento_od} | Esf: ${p.esfera_od} | Cil: ${p.cilindro_od}`;
+                    comprasMap[k] = (comprasMap[k] || 0) + 1;
+                }
+
+                if (p.origen_oi === 'STOCK') {
+                    let k = `${p.tratamiento_oi} | Esf: ${p.esfera_oi} | Cil: ${p.cilindro_oi}`;
+                    stockMap[k] = (stockMap[k] || 0) + 1;
+                } else if (p.origen_oi === 'COMPRA') {
+                    let k = `${p.tratamiento_oi} | Esf: ${p.esfera_oi} | Cil: ${p.cilindro_oi}`;
+                    comprasMap[k] = (comprasMap[k] || 0) + 1;
+                }
+            });
+
+            renderListaAgrupada('listaBodega', stockMap, 'text-emerald-700', '📦');
+            renderListaAgrupada('listaBodegaCompras', comprasMap, 'text-red-700', '🛒');
+        }
+
+        function renderListaAgrupada(elemId, mapa, colorClass, icono) {
+            const el = document.getElementById(elemId);
+            const keys = Object.keys(mapa);
+
+            if (keys.length === 0) {
+                el.innerHTML = `<p class="text-xs text-slate-400 italic">No hay cristales en esta categoría.</p>`;
+                return;
+            }
+
+            el.innerHTML = keys.map(k => `
+        <div class="flex justify-between items-center p-2 bg-white rounded border text-xs shadow-sm">
+          <span class="font-bold ${colorClass}">${icono} ${k}</span>
+          <span class="bg-slate-800 text-white px-2 py-0.5 rounded-full font-bold text-[10px]">Cantidad: ${mapa[k]}</span>
+        </div>
+      `).join('');
+        }
+
+        function filtrarCentralPorTurno(turno) {
+            turnoFiltroCentral = turno;
+            cargarOficinaCentral();
+        }
+
+        async function cargarOficinaCentral() {
+            const fechaISO = document.getElementById('fechaFiltroCentral').value;
+            const { data, error } = await _supabase
+                .from('pedidos')
+                .select('*')
+                .eq('fecha', fechaISO)
+                .eq('turno', turnoFiltroCentral);
+
+            if (error) return;
+
+            let stockMap = {};
+            let comprasMap = {};
+
+            data.forEach(p => {
+                if (p.origen_od === 'STOCK') {
+                    let k = `${p.tratamiento_od} | Esf: ${p.esfera_od} | Cil: ${p.cilindro_od}`;
+                    stockMap[k] = (stockMap[k] || 0) + 1;
+                } else {
+                    let k = `${p.tratamiento_od} | Esf: ${p.esfera_od} | Cil: ${p.cilindro_od}`;
+                    comprasMap[k] = (comprasMap[k] || 0) + 1;
+                }
+
+                if (p.origen_oi === 'STOCK') {
+                    let k = `${p.tratamiento_oi} | Esf: ${p.esfera_oi} | Cil: ${p.cilindro_oi}`;
+                    stockMap[k] = (stockMap[k] || 0) + 1;
+                } else {
+                    let k = `${p.tratamiento_oi} | Esf: ${p.esfera_oi} | Cil: ${p.cilindro_oi}`;
+                    comprasMap[k] = (comprasMap[k] || 0) + 1;
+                }
+            });
+
+            renderListaAgrupada('centralListaStockTecnico', stockMap, 'text-emerald-700', '📦');
+            renderListaAgrupada('centralListaComprasTecnicas', comprasMap, 'text-red-700', '🛒');
+
+            const desEl = document.getElementById('centralListaDesgloseClientes');
+            if (data.length === 0) {
+                desEl.innerHTML = `<p class="text-xs text-slate-400 italic">No hay órdenes para este turno.</p>`;
+                return;
+            }
+
+            desEl.innerHTML = data.map(p => `
+        <div class="p-2.5 bg-slate-50 rounded border text-xs space-y-1">
+          <div class="flex justify-between font-bold text-slate-800 border-b pb-1">
+            <span>📍 ${p.sucursal} - Orden: ${p.orden}</span>
+            <span class="text-[10px] text-slate-500">Fecha: ${formatearFechaLatina(p.fecha)} | ID: ${p.id}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[10px] pt-1">
+            <div><strong class="text-blue-800">OD:</strong> ${p.tratamiento_od} (${p.esfera_od}/${p.cilindro_od}) <span class="font-bold text-slate-600">[${p.origen_od}]</span></div>
+            <div><strong class="text-blue-800">OI:</strong> ${p.tratamiento_oi} (${p.esfera_oi}/${p.cilindro_oi}) <span class="font-bold text-slate-600">[${p.origen_oi}]</span></div>
+          </div>
+        </div>
+      `).join('');
+        }
+
+        function solicitarAgotado(todoElMaterial) {
+            const trat = document.getElementById('st_trat').value;
+            const esf = document.getElementById('st_esf').value;
+            const cil = document.getElementById('st_cil').value;
+
+            if (!todoElMaterial && (!esf || !cil)) {
+                alert("Para agotar una dioptría debes ingresar Esfera y Cilindro.");
+                return;
+            }
+
+            pendienteAgotar = { trat, esf, cil, todoElMaterial };
+            const desc = todoElMaterial
+                ? `Agotar TODO EL MATERIAL: ${trat}`
+                : `Agotar Dioptría: ${trat} | Esf: ${esf} | Cil: ${cil}`;
+
+            document.getElementById('textoModalConfirmacion').innerText = desc;
+            document.getElementById('modalConfirmacionAgotado').classList.remove('hidden');
+        }
+
+        function cerrarModalAgotado() {
+            document.getElementById('modalConfirmacionAgotado').classList.add('hidden');
+            pendienteAgotar = null;
+        }
+
+        async function ejecutarAgotado() {
+            if (!pendienteAgotar) return;
+            const { trat, esf, cil, todoElMaterial } = pendienteAgotar;
+
+            const payload = {
+                tratamiento: trat,
+                esfera: todoElMaterial ? null : parseFloat(esf),
+                cilindro: todoElMaterial ? null : parseFloat(cil),
+                todo_el_material: todoElMaterial
+            };
+
+            const { error } = await _supabase.from('agotados').insert([payload]);
+            cerrarModalAgotado();
+
+            if (error) alert("Error al agotar: " + error.message);
+            else {
+                alert("✅ Cristal/Material marcado como agotado correctamente.");
+                document.getElementById('st_esf').value = '';
+                document.getElementById('st_cil').value = '';
+            }
+        }
+
+        async function reponerStock() {
+            const trat = document.getElementById('st_trat').value;
+            if (!confirm(`¿Restablecer todo el stock para el material: ${trat}?`)) return;
+
+            const { error } = await _supabase.from('agotados').delete().eq('tratamiento', trat);
+            if (error) alert("Error al reponer stock: " + error.message);
+            else alert(`✅ Stock restablecido para ${trat}.`);
+        }
+
+        async function guardarFaltanteCentral(e) {
+            e.preventDefault();
+            const orden = document.getElementById('orden_faltante').value;
+            const fechaHoy = obtenerFechaHoy();
+            const turnoAsignado = turnoFiltroCentral;
+
+            const od = { trat: document.getElementById('trat_od_f').value, esf: document.getElementById('esf_od_f').value, cil: document.getElementById('cil_od_f').value };
+            const oi = { trat: document.getElementById('trat_oi_f').value, esf: document.getElementById('esf_oi_f').value, cil: document.getElementById('cil_oi_f').value };
+
+            const resOD = await consultarDisponibilidad(od.trat, od.esf, od.cil);
+            const resOI = await consultarDisponibilidad(oi.trat, oi.esf, oi.cil);
+
+            const payload = {
+                sucursal: 'Oficina Central (Faltante)',
+                orden,
+                tratamiento_od: od.trat, esfera_od: od.esf, cilindro_od: od.cil, origen_od: resOD,
+                tratamiento_oi: oi.trat, esfera_oi: oi.esf, cilindro_oi: oi.cil, origen_oi: resOI,
+                fecha: fechaHoy,
+                turno: turnoAsignado
+            };
+
+            const { error } = await _supabase.from('pedidos').insert([payload]);
+            if (error) alert("Error al guardar faltante: " + error.message);
+            else {
+                document.getElementById('orden_faltante').value = '';
+                cargarOficinaCentral();
+            }
+        }
+    </script>
+</body>
+
+</html>
