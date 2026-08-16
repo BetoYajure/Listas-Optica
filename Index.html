@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Listas de Cristales</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white !important;
+                padding: 0 !important;
+            }
+
+            .printable-area {
+                display: block !important;
+                width: 100% !important;
+            }
+
+            .print-header {
+                display: block !important;
+            }
+        }
+
+        .print-header {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+    <!-- PANTALLA DE LOGIN -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full">
+            <h1 class="text-xl font-bold text-center mb-6">👓 Acceso a Listas de Cristales</h1>
+            <select id="loginPerfil" class="w-full p-3 mb-4 bg-slate-50 border rounded-lg text-sm font-semibold">
+                <option value="Libertad">📍 Sucursal Libertad</option>
+                <option value="Villanelo">📍 Sucursal Villanelo</option>
+                <option value="Local Nuevo">📍 Sucursal Local Nuevo</option>
+                <option value="Quilpué">📍 Sucursal Quilpué</option>
+                <option value="bodega">📦 Punto Óptico (Bodega)</option>
+                <option value="central">🏢 Oficina Central</option>
+            </select>
+            <input type="password" id="loginPassword" placeholder="Contraseña de Acceso"
+                class="w-full p-3 mb-4 bg-slate-50 border rounded-lg text-sm">
+            <div id="loginError" class="hidden text-xs text-red-600 font-bold mb-3 text-center">❌ Contraseña
+                incorrecta.</div>
+            <button id="btnIngresar"
+                class="w-full bg-blue-900 text-white py-3 rounded-lg font-bold hover:bg-blue-800 transition">Ingresar</button>
+        </div>
+    </div>
+
+    <!-- MODAL HERRAMIENTA DE TRANSPOSICIÓN -->
+    <div id="modalTransposicion"
+        class="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-300 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-bold text-blue-900">🔄 Transposición</span>
+                <button onclick="cerrarModalTransposicion()"
+                    class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">✕</button>
+            </div>
+            <div id="transContent" class="space-y-2">
+                <p class="text-[11px] text-slate-500">Ingresa la receta con cilindro positivo (+) para convertirla a
+                    negativo (-).</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 mb-0.5">Esfera</label>
+                        <div class="flex items-center">
+                            <button type="button" onclick="pasoTransp('t_esf', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-l text-xs font-bold">-</button>
+                            <input type="text" id="t_esf" placeholder="0.00" oninput="calcularTranspFlotante()" class="w-full text-center p-2 border-t border-b text-sm">
+                            <button type="button" onclick="pasoTransp('t_esf', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-r text-xs font-bold">+</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 mb-0.5">Cilindro (+)</label>
+                        <div class="flex items-center">
+                            <button type="button" onclick="pasoTransp('t_cil', -0.25, 'positivo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-l text-xs font-bold">-</button>
+                            <input type="text" id="t_cil" placeholder="0.00" oninput="forzarPositivo('t_cil'); calcularTranspFlotante()" class="w-full text-center p-2 border-t border-b text-sm">
+                            <button type="button" onclick="pasoTransp('t_cil', 0.25, 'positivo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-r text-xs font-bold">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="t_resultado" class="text-sm font-mono text-slate-700 bg-slate-50 p-2 rounded text-center">Ingresa valores...
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 pt-1">
+                    <button onclick="aplicarAlFormulario('od')" id="btnAplicarOd"
+                        class="bg-blue-600 text-white py-2 rounded text-xs font-bold hidden">Usar OD</button>
+                    <button onclick="aplicarAlFormulario('oi')" id="btnAplicarOi"
+                        class="bg-indigo-600 text-white py-2 rounded text-xs font-bold hidden">Usar OI</button>
+                    <button onclick="limpiarTransposicion()"
+                        class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded text-xs font-bold">Limpiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <div id="main-content" class="max-w-6xl mx-auto p-4 hidden">
+        <nav class="bg-blue-900 text-white p-4 rounded-xl mb-6 flex flex-wrap justify-between items-center gap-2 shadow-lg no-print">
+            <div>
+                <h1 class="font-bold text-lg" id="navTitulo">Óptica App</h1>
+                <span id="navTurnoActual" class="text-xs text-blue-200"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="abrirModalTransposicion()"
+                    class="bg-amber-500 hover:bg-amber-600 text-slate-900 px-3 py-1.5 rounded text-xs font-bold">🔄 Transposición</button>
+                <button onclick="location.reload()"
+                    class="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded text-xs font-bold">Cerrar Sesión</button>
+            </div>
+        </nav>
+
+        <!-- VISTA SUCURSAL -->
+        <div id="view-sucursal" class="view-panel hidden grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div class="print-header md:col-span-12 mb-2">
+                <h2 class="text-lg font-bold">DIAGNOMAR</h2>
+                <h3 class="text-sm font-semibold">Sucursal <span id="printHeaderSucursal"></span></h3>
+                <p class="text-xs">Lista <span id="printHeaderInfoSucursal"></span></p>
+                <hr class="my-2 border-slate-400">
+            </div>
+            <div class="md:col-span-5 bg-white p-5 rounded-xl shadow no-print">
+                <h2 class="font-bold mb-1 text-blue-900 border-b pb-2" id="tituloFormPedido">Ingreso de Pedido</h2>
+                <p class="text-[11px] text-slate-500 mb-3 mt-1">Llena solo el ojo que necesites (OD y/o OI). El
+                    cilindro se guarda siempre en negativo.</p>
+                <form id="formPedido" onsubmit="guardarPedido(event)" class="space-y-3">
+                    <input type="hidden" id="pedidoIdEditar" value="">
+                    <div>
+                        <label class="text-xs font-semibold text-slate-600 block mb-1">Tratamiento / Material</label>
+                        <select id="tratamiento" class="w-full p-2.5 bg-slate-50 border rounded text-sm font-semibold">
+                            <option value="Blue Cut">Blue Cut</option>
+                            <option value="Capa">Capa</option>
+                            <option value="Foto Gris">Foto Gris</option>
+                            <option value="Foto Cafe">Foto Café</option>
+                            <option value="Foto Lila">Foto Lila</option>
+                            <option value="Blanco Para Tinte">Blanco Para Tinte</option>
+                            <option value="Policarbonato">Policarbonato</option>
+                        </select>
+                    </div>
+
+                    <!-- OJO DERECHO -->
+                    <div class="p-2.5 bg-slate-50 border rounded-lg">
+                        <span class="text-xs font-bold text-blue-900 block mb-1">Ojo Derecho (OD) - Opcional</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Esfera</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('esf_od', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="esf_od" placeholder="0.00" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('esf_od', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Cilindro (-)</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('cil_od', -0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="cil_od" placeholder="0.00" oninput="forzarNegativo('cil_od')" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('cil_od', 0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OJO IZQUIERDO -->
+                    <div class="p-2.5 bg-slate-50 border rounded-lg">
+                        <span class="text-xs font-bold text-blue-900 block mb-1">Ojo Izquierdo (OI) - Opcional</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Esfera</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('esf_oi', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="esf_oi" placeholder="0.00" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('esf_oi', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Cilindro (-)</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('cil_oi', -0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="cil_oi" placeholder="0.00" oninput="forzarNegativo('cil_oi')" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('cil_oi', 0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="submit" id="btnGuardarPedido"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold text-sm shadow">Enviar
+                            Pedido</button>
+                        <button type="button" id="btnCancelarEdicion" onclick="cancelarEdicionPedido()"
+                            class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 px-3 rounded-lg font-bold text-xs">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="md:col-span-7 bg-white p-5 rounded-xl shadow">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <div class="flex items-center gap-2">
+                        <h2 id="tituloListaSucursal" class="font-bold text-blue-900">Lista Activa</h2>
+                        <button onclick="toggleHistorialSucursal()" id="btnToggleHistorial"
+                            class="no-print bg-slate-200 hover:bg-slate-300 text-slate-700 px-2.5 py-1 rounded text-xs font-bold">📂
+                            Ver Historial (7 días)</button>
+                    </div>
+                    <button onclick="window.print()"
+                        class="no-print bg-slate-800 hover:bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold">🖨️
+                        Imprimir Lista</button>
+                </div>
+
+                <!-- Filtro Historial Sucursal (Oculto por defecto) -->
+                <div id="panelFiltroHistorial"
+                    class="hidden mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2 items-center text-xs">
+                    <span class="font-bold text-amber-900">Ver día/turno:</span>
+                    <div class="relative inline-block">
+                        <input type="date" id="historialFecha" onchange="cargarSucursal(); actualizarLabelFecha('historialFecha','labelHistorialFecha')"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div id="labelHistorialFecha" class="p-1 border rounded bg-white text-xs pointer-events-none whitespace-nowrap">📅 --/--/----</div>
+                    </div>
+                    <select id="historialTurno" onchange="cargarSucursal()" class="p-1 border rounded bg-white">
+                        <option value="Mañana">Mañana</option>
+                        <option value="Tarde">Tarde</option>
+                    </select>
+                </div>
+
+                <div id="listaSucursal" class="space-y-2 max-h-[450px] overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- VISTA PUNTO ÓPTICO Y CENTRAL (ADMIN) -->
+        <div id="view-admin" class="view-panel hidden bg-white p-6 rounded-xl shadow printable-area">
+            <div class="print-header mb-3">
+                <h2 class="text-lg font-bold" id="printHeaderEmpresa"></h2>
+                <h3 class="text-sm font-semibold" id="printHeaderArea"></h3>
+                <p class="text-xs" id="printHeaderInfoAdmin"></p>
+                <hr class="my-2 border-slate-400">
+            </div>
+            <div class="flex justify-between items-center mb-4 border-b pb-2 no-print">
+                <h2 id="tituloAdmin" class="font-bold text-lg text-blue-900">Panel de Gestión</h2>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <select id="filtroTurnoAdmin" onchange="cargarAdmin()"
+                        class="p-1.5 border rounded text-xs bg-slate-50">
+                        <option value="Mañana">Lista Mañana</option>
+                        <option value="Tarde">Lista Tarde</option>
+                    </select>
+                    <div class="relative inline-block">
+                        <input type="date" id="filtroFechaAdmin" onchange="cargarAdmin(); actualizarLabelFecha('filtroFechaAdmin','labelFechaAdmin')"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div id="labelFechaAdmin" class="p-1.5 border rounded text-xs bg-slate-50 pointer-events-none whitespace-nowrap">📅 --/--/----</div>
+                    </div>
+                    <button onclick="window.print()"
+                        class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold">🖨️
+                        Imprimir Pestaña Actual</button>
+                </div>
+            </div>
+
+            <!-- PESTAÑAS DE VISTA -->
+            <div class="flex flex-wrap gap-2 mb-4 no-print border-b pb-2">
+                <button onclick="cambiarTabAdmin('stock')" id="tabStock"
+                    class="px-3 py-1.5 bg-blue-900 text-white text-xs font-bold rounded-lg">📦 Stock Punto</button>
+                <button onclick="cambiarTabAdmin('compras')" id="tabCompras"
+                    class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">🛒 Compras
+                    Externas</button>
+                <button onclick="cambiarTabAdmin('exactas')" id="tabExactas"
+                    class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">📋 Lista por
+                    Sucursal</button>
+                <button onclick="cambiarTabAdmin('agotados')" id="tabAgotados"
+                    class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">🚫 Cristales
+                    Agotados</button>
+                <button onclick="cambiarTabAdmin('faltantes')" id="tabFaltantes"
+                    class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg hidden">⚠️ Faltantes
+                    Central</button>
+            </div>
+
+            <!-- CONTENIDO DE PESTAÑAS -->
+            <div id="panelStock" class="admin-subpanel space-y-2"></div>
+            <div id="panelCompras" class="admin-subpanel space-y-2 hidden"></div>
+
+            <!-- Panel Lista por Sucursal -->
+            <div id="panelExactas" class="admin-subpanel space-y-4 hidden">
+                <div class="flex gap-2 items-center bg-slate-50 p-3 rounded-lg border no-print">
+                    <span class="text-xs font-bold text-slate-700">Seleccionar Sucursal:</span>
+                    <select id="selectSucursalExacta" onchange="cargarAdmin()"
+                        class="p-1.5 border rounded text-xs bg-white font-semibold">
+                        <option value="Libertad">Sucursal Libertad</option>
+                        <option value="Villanelo">Sucursal Villanelo</option>
+                        <option value="Local Nuevo">Sucursal Local Nuevo</option>
+                        <option value="Quilpué">Sucursal Quilpué</option>
+                    </select>
+                </div>
+                <div id="listaExactasSucursal" class="space-y-2"></div>
+            </div>
+
+            <!-- Panel Cristales Agotados (Punto Óptico y Central, ambos administran) -->
+            <div id="panelAgotados" class="admin-subpanel space-y-4 hidden">
+                <div class="p-4 bg-slate-50 border rounded-lg max-w-lg no-print">
+                    <h3 class="font-bold text-xs text-blue-900 mb-2">Marcar Cristal Agotado</h3>
+                    <div class="space-y-2 mb-2">
+                        <select id="agotado_tipo" onchange="toggleCamposAgotado()"
+                            class="w-full p-1.5 border rounded text-xs bg-white">
+                            <option value="dioptria">Dioptría específica</option>
+                            <option value="material">Material completo (todas las dioptrías)</option>
+                        </select>
+                        <select id="agotado_tratamiento" class="w-full p-1.5 border rounded text-xs bg-white">
+                            <option value="Blue Cut">Blue Cut</option>
+                            <option value="Capa">Capa</option>
+                            <option value="Foto Gris">Foto Gris</option>
+                            <option value="Foto Cafe">Foto Café</option>
+                            <option value="Foto Lila">Foto Lila</option>
+                            <option value="Blanco Para Tinte">Blanco Para Tinte</option>
+                            <option value="Policarbonato">Policarbonato</option>
+                        </select>
+                        <div id="agotado_campos_dioptria" class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Esfera</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('agotado_esf', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="agotado_esf" placeholder="0.00" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('agotado_esf', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-slate-500 mb-0.5">Cilindro (-)</label>
+                                <div class="flex items-center">
+                                    <button type="button" onclick="paso('agotado_cil', -0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                    <input type="text" id="agotado_cil" placeholder="0.00" oninput="forzarNegativo('agotado_cil')" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                    <button type="button" onclick="paso('agotado_cil', 0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="registrarAgotado()"
+                        class="w-full bg-red-700 hover:bg-red-800 text-white py-1.5 rounded text-xs font-bold">Marcar como
+                        Agotado</button>
+                </div>
+                <div class="font-bold text-xs text-slate-700 pt-2">Cristales agotados actualmente:</div>
+                <div id="listaAgotadosActivos" class="space-y-1"></div>
+            </div>
+
+            <!-- Panel Faltantes en Oficina Central (solo perfil Central) -->
+            <div id="panelFaltantes" class="admin-subpanel space-y-4 hidden">
+                <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg max-w-lg no-print">
+                    <h3 class="font-bold text-xs text-amber-900 mb-1">Registrar Faltante al Recibir el Pedido</h3>
+                    <p class="text-[11px] text-amber-800 mb-2">Para cristales que faltaron o llegaron mal colocados
+                        (error de Punto Óptico o proveedor). Distinto de "Cristales Agotados".</p>
+                    <select id="faltante_tratamiento" class="w-full p-1.5 border rounded text-xs bg-white mb-2">
+                        <option value="Blue Cut">Blue Cut</option>
+                        <option value="Capa">Capa</option>
+                        <option value="Foto Gris">Foto Gris</option>
+                        <option value="Foto Cafe">Foto Café</option>
+                        <option value="Foto Lila">Foto Lila</option>
+                        <option value="Blanco Para Tinte">Blanco Para Tinte</option>
+                        <option value="Policarbonato">Policarbonato</option>
+                    </select>
+                    <div class="grid grid-cols-2 gap-2 mb-1">
+                        <div>
+                            <label class="block text-[9px] text-slate-600 mb-0.5">Esf OD</label>
+                            <div class="flex items-center">
+                                <button type="button" onclick="paso('faltante_esf_od', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                <input type="text" id="faltante_esf_od" placeholder="0.00" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                <button type="button" onclick="paso('faltante_esf_od', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] text-slate-600 mb-0.5">Cil OD (-)</label>
+                            <div class="flex items-center">
+                                <button type="button" onclick="paso('faltante_cil_od', -0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                <input type="text" id="faltante_cil_od" placeholder="0.00" oninput="forzarNegativo('faltante_cil_od')" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                <button type="button" onclick="paso('faltante_cil_od', 0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-[9px] text-slate-600 mb-0.5">Esf OI</label>
+                            <div class="flex items-center">
+                                <button type="button" onclick="paso('faltante_esf_oi', -0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                <input type="text" id="faltante_esf_oi" placeholder="0.00" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                <button type="button" onclick="paso('faltante_esf_oi', 0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] text-slate-600 mb-0.5">Cil OI (-)</label>
+                            <div class="flex items-center">
+                                <button type="button" onclick="paso('faltante_cil_oi', -0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-l text-xs font-bold">-</button>
+                                <input type="text" id="faltante_cil_oi" placeholder="0.00" oninput="forzarNegativo('faltante_cil_oi')" class="w-full text-center p-1.5 border-t border-b text-xs bg-white">
+                                <button type="button" onclick="paso('faltante_cil_oi', 0.25, 'negativo')" class="bg-slate-200 hover:bg-slate-300 px-2 py-1.5 rounded-r text-xs font-bold">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="registrarFaltanteCentral()"
+                        class="w-full bg-amber-600 hover:bg-amber-700 text-white py-1.5 rounded text-xs font-bold">Agregar
+                        Faltante</button>
+                </div>
+                <div class="font-bold text-xs text-slate-700 pt-2">Faltantes de esta lista (fecha/turno filtrados
+                    arriba):</div>
+                <div id="listaFaltantesActivos" class="space-y-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN SUPABASE ---
+        const SUPABASE_URL = 'https://seexpuoeexbiwrtwgyrl.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_yS4E32rn18EbV7etczrWmg_nixka3Wx';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Horarios de corte de turno (ajustables aquí)
+        const HORA_CIERRE_MANANA = 15; // antes de esta hora -> Lista Mañana
+        const HORA_CIERRE_TARDE = 22;  // antes de esta hora (y después de la de arriba) -> Lista Tarde
+
+        let perfilActual = '';
+        let tabActivaAdmin = 'stock';
+        let modoHistorialSucursal = false;
+
+        const clavesAcceso = {
+            "Libertad": "libertad2026",
+            "Villanelo": "villanelo2026",
+            "Local Nuevo": "local2026",
+            "Quilpué": "quilpue2026",
+            "bodega": "bodega2026",
+            "central": "central2026"
+        };
+
+        // --- LOGIN Y ARRANQUE ---
+        document.getElementById('loginPassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') validarAcceso(); });
+        document.getElementById('btnIngresar').onclick = validarAcceso;
+
+        function validarAcceso() {
+            perfilActual = document.getElementById('loginPerfil').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            if (clavesAcceso[perfilActual] === pass) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-content').classList.remove('hidden');
+
+                const turnoInfo = obtenerTurnoActual();
+                document.getElementById('navTurnoActual').innerText = `Lista activa: ${turnoInfo.turno} (${formatoFechaLegible(turnoInfo.fecha)})`;
+
+                if (perfilActual === 'bodega' || perfilActual === 'central') {
+                    document.getElementById('view-admin').classList.remove('hidden');
+                    document.getElementById('navTitulo').innerText = "Panel " + (perfilActual === 'bodega' ? 'Punto Óptico' : 'Oficina Central');
+                    document.getElementById('filtroFechaAdmin').value = turnoInfo.fecha;
+                    document.getElementById('filtroTurnoAdmin').value = turnoInfo.turno;
+                    actualizarLabelFecha('filtroFechaAdmin', 'labelFechaAdmin');
+
+                    // Solo Oficina Central ve la pestaña de Faltantes
+                    if (perfilActual === 'central') {
+                        document.getElementById('tabFaltantes').classList.remove('hidden');
+                    }
+
+                    cargarAdmin();
+                } else {
+                    document.getElementById('view-sucursal').classList.remove('hidden');
+                    document.getElementById('navTitulo').innerText = "Sucursal: " + perfilActual;
+                    document.getElementById('historialFecha').value = turnoInfo.fecha;
+                    document.getElementById('historialTurno').value = turnoInfo.turno;
+                    actualizarLabelFecha('historialFecha', 'labelHistorialFecha');
+                    cargarSucursal();
+                }
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        // --- TURNOS ---
+        function formatoFecha(d) {
+            // OJO: se arma con componentes de hora LOCAL (no toISOString, que usa UTC
+            // y podía adelantar la fecha si ya era de noche en Chile).
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dia = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dia}`;
+        }
+
+        function formatoFechaLegible(fechaISO) {
+            if (!fechaISO) return '';
+            const [y, m, d] = fechaISO.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function actualizarLabelFecha(idInput, idLabel) {
+            const val = document.getElementById(idInput).value;
+            document.getElementById(idLabel).innerText = val ? `📅 ${formatoFechaLegible(val)}` : '📅 --/--/----';
+        }
+
+        function obtenerTurnoActual() {
+            const ahora = new Date();
+            const hora = ahora.getHours();
+            if (hora < HORA_CIERRE_MANANA) {
+                return { turno: 'Mañana', fecha: formatoFecha(ahora) };
+            } else if (hora < HORA_CIERRE_TARDE) {
+                return { turno: 'Tarde', fecha: formatoFecha(ahora) };
+            } else {
+                const manana = new Date(ahora);
+                manana.setDate(ahora.getDate() + 1);
+                return { turno: 'Mañana', fecha: formatoFecha(manana) };
+            }
+        }
+
+        function forzarNegativo(idCampo) {
+            const campo = document.getElementById(idCampo);
+            const val = parseFloat(campo.value);
+            if (!isNaN(val) && val > 0) campo.value = (-val).toFixed(2);
+        }
+
+        function forzarPositivo(idCampo) {
+            const campo = document.getElementById(idCampo);
+            const val = parseFloat(campo.value);
+            if (!isNaN(val) && val < 0) campo.value = (-val).toFixed(2);
+        }
+
+        // Botones +/- de 0.25 para cualquier campo de dioptría.
+        // limite: 'negativo' fuerza tope máximo 0 (cilindros de pedidos), 'positivo' fuerza mínimo 0
+        // (cilindro de Transposición), sin límite si se omite.
+        function paso(idCampo, delta, limite) {
+            const campo = document.getElementById(idCampo);
+            let v = parseFloat(campo.value);
+            if (isNaN(v)) v = 0;
+            let nuevo = v + delta;
+            if (limite === 'negativo' && nuevo > 0) nuevo = 0;
+            if (limite === 'positivo' && nuevo < 0) nuevo = 0;
+            campo.value = nuevo.toFixed(2);
+        }
+
+        function pasoTransp(idCampo, delta, limite) {
+            paso(idCampo, delta, limite);
+            calcularTranspFlotante();
+        }
+
+        function fmt(n) {
+            if (n === null || n === undefined || n === '') return '0.00';
+            return Number(n).toFixed(2);
+        }
+
+        function fmtEsf(n) {
+            if (n === null || n === undefined || n === '') return '0.00';
+            const num = Number(n);
+            return (num > 0 ? '+' : '') + num.toFixed(2);
+        }
+
+        const TRATAMIENTOS_ORDEN = ['Blue Cut', 'Capa', 'Foto Gris', 'Foto Cafe', 'Foto Lila', 'Blanco Para Tinte', 'Policarbonato'];
+
+        // --- LÓGICA DE TRANSPOSICIÓN (MODAL) ---
+        function abrirModalTransposicion() {
+            document.getElementById('modalTransposicion').classList.remove('hidden');
+        }
+        function cerrarModalTransposicion() {
+            document.getElementById('modalTransposicion').classList.add('hidden');
+        }
+
+        function calcularResultadoTransp(esfStr, cilStr) {
+            const es = parseFloat(esfStr) || 0;
+            const ci = parseFloat(cilStr) || 0;
+            if (!ci) return null;
+            const ne = es + ci;
+            const nc = -Math.abs(ci);
+            return { esf: ne, cil: nc };
+        }
+
+        function calcularTranspFlotante() {
+            const es = document.getElementById('t_esf').value;
+            const ci = document.getElementById('t_cil').value;
+            const r = calcularResultadoTransp(es, ci);
+            const resEl = document.getElementById('t_resultado');
+
+            if (r) {
+                resEl.innerText = `${r.esf > 0 ? '+' : ''}${r.esf.toFixed(2)} / ${r.cil.toFixed(2)}`;
+                const mostrarBotones = (perfilActual !== 'bodega' && perfilActual !== 'central');
+                document.getElementById('btnAplicarOd').classList.toggle('hidden', !mostrarBotones);
+                document.getElementById('btnAplicarOi').classList.toggle('hidden', !mostrarBotones);
+            } else {
+                resEl.innerText = 'Ingresa valores...';
+                document.getElementById('btnAplicarOd').classList.add('hidden');
+                document.getElementById('btnAplicarOi').classList.add('hidden');
+            }
+        }
+
+        function aplicarAlFormulario(ojo) {
+            const es = document.getElementById('t_esf').value;
+            const ci = document.getElementById('t_cil').value;
+            const r = calcularResultadoTransp(es, ci);
+            if (!r) return;
+
+            if (ojo === 'od') {
+                document.getElementById('esf_od').value = r.esf.toFixed(2);
+                document.getElementById('cil_od').value = r.cil.toFixed(2);
+                cerrarModalTransposicion();
+                alert('¡Aplicado al Ojo Derecho (OD)!');
+            } else {
+                document.getElementById('esf_oi').value = r.esf.toFixed(2);
+                document.getElementById('cil_oi').value = r.cil.toFixed(2);
+                cerrarModalTransposicion();
+                alert('¡Aplicado al Ojo Izquierdo (OI)!');
+            }
+        }
+
+        function limpiarTransposicion() {
+            document.getElementById('t_esf').value = '';
+            document.getElementById('t_cil').value = '';
+            document.getElementById('t_resultado').innerText = 'Ingresa valores...';
+            document.getElementById('btnAplicarOd').classList.add('hidden');
+            document.getElementById('btnAplicarOi').classList.add('hidden');
+        }
+
+        // --- SUCURSAL: GUARDAR, EDITAR, ELIMINAR, HISTORIAL ---
+        function toggleHistorialSucursal() {
+            modoHistorialSucursal = !modoHistorialSucursal;
+            const panel = document.getElementById('panelFiltroHistorial');
+            const titulo = document.getElementById('tituloListaSucursal');
+            const btn = document.getElementById('btnToggleHistorial');
+
+            if (modoHistorialSucursal) {
+                panel.classList.remove('hidden');
+                titulo.innerText = "Historial";
+                btn.innerText = "Ver Lista Activa";
+            } else {
+                panel.classList.add('hidden');
+                titulo.innerText = "Lista Activa";
+                btn.innerText = "📂 Ver Historial (7 días)";
+            }
+            cargarSucursal();
+        }
+
+        async function guardarPedido(e) {
+            e.preventDefault();
+            const tratamiento = document.getElementById('tratamiento').value;
+            const esf_od = document.getElementById('esf_od').value.trim();
+            const cil_od = document.getElementById('cil_od').value.trim();
+            const esf_oi = document.getElementById('esf_oi').value.trim();
+            const cil_oi = document.getElementById('cil_oi').value.trim();
+            const odTiene = esf_od !== '' || cil_od !== '';
+            const oiTiene = esf_oi !== '' || cil_oi !== '';
+
+            if (!odTiene && !oiTiene) {
+                alert("⚠️ Ingresa al menos un valor de esfera o cilindro para OD y/o OI.");
+                return;
+            }
+
+            const od = odTiene ? { esf: parseFloat(esf_od || '0'), cil: parseFloat(cil_od || '0') } : null;
+            const oi = oiTiene ? { esf: parseFloat(esf_oi || '0'), cil: parseFloat(cil_oi || '0') } : null;
+
+            const idEditar = document.getElementById('pedidoIdEditar').value;
+
+            if (idEditar) {
+                const { error } = await _supabase.from('pedidos').update({ tratamiento, od, oi }).eq('id', idEditar);
+                if (error) { alert("Error al guardar cambios: " + error.message); return; }
+                cancelarEdicionPedido();
+            } else {
+                const tInfo = obtenerTurnoActual();
+                const { count } = await _supabase.from('pedidos')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('sucursal', perfilActual)
+                    .eq('fecha', tInfo.fecha)
+                    .eq('turno', tInfo.turno);
+
+                const correlativoNum = (count || 0) + 1;
+
+                const nuevoPedido = {
+                    sucursal: perfilActual,
+                    fecha: tInfo.fecha,
+                    turno: tInfo.turno,
+                    correlativo: correlativoNum,
+                    tratamiento: tratamiento,
+                    od, oi
+                };
+
+                const { error } = await _supabase.from('pedidos').insert([nuevoPedido]);
+                if (error) { alert("Error al guardar: " + error.message); return; }
+            }
+
+            document.getElementById('formPedido').reset();
+            cargarSucursal();
+        }
+
+        function cancelarEdicionPedido() {
+            document.getElementById('pedidoIdEditar').value = '';
+            document.getElementById('formPedido').reset();
+            document.getElementById('btnCancelarEdicion').classList.add('hidden');
+            document.getElementById('btnGuardarPedido').innerText = 'Enviar Pedido';
+            document.getElementById('tituloFormPedido').innerText = 'Ingreso de Pedido';
+        }
+
+        async function editarPedido(id) {
+            const { data, error } = await _supabase.from('pedidos').select('*').eq('id', id).single();
+            if (error || !data) { alert('No se pudo cargar el pedido.'); return; }
+            document.getElementById('pedidoIdEditar').value = data.id;
+            document.getElementById('tratamiento').value = data.tratamiento;
+            document.getElementById('esf_od').value = data.od ? fmt(data.od.esf) : '';
+            document.getElementById('cil_od').value = data.od ? fmt(data.od.cil) : '';
+            document.getElementById('esf_oi').value = data.oi ? fmt(data.oi.esf) : '';
+            document.getElementById('cil_oi').value = data.oi ? fmt(data.oi.cil) : '';
+            document.getElementById('btnCancelarEdicion').classList.remove('hidden');
+            document.getElementById('btnGuardarPedido').innerText = 'Guardar Cambios';
+            document.getElementById('tituloFormPedido').innerText = `Editando Venta ${data.correlativo}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function eliminarPedido(id) {
+            if (!confirm('¿Eliminar este cristal de la lista?')) return;
+            const { error } = await _supabase.from('pedidos').delete().eq('id', id);
+            if (error) { alert('Error al eliminar: ' + error.message); return; }
+            cargarSucursal();
+        }
+
+        async function cargarSucursal() {
+            let fechaFiltro, turnoFiltro, esListaActiva;
+
+            if (modoHistorialSucursal) {
+                fechaFiltro = document.getElementById('historialFecha').value;
+                turnoFiltro = document.getElementById('historialTurno').value;
+                const activo = obtenerTurnoActual();
+                esListaActiva = (fechaFiltro === activo.fecha && turnoFiltro === activo.turno);
+            } else {
+                const tInfo = obtenerTurnoActual();
+                fechaFiltro = tInfo.fecha;
+                turnoFiltro = tInfo.turno;
+                esListaActiva = true;
+            }
+
+            document.getElementById('printHeaderSucursal').innerText = perfilActual;
+            document.getElementById('printHeaderInfoSucursal').innerText = `${turnoFiltro} — ${formatoFechaLegible(fechaFiltro)}`;
+
+            const { data } = await _supabase.from('pedidos')
+                .select('*')
+                .eq('sucursal', perfilActual)
+                .eq('fecha', fechaFiltro)
+                .eq('turno', turnoFiltro)
+                .order('correlativo', { ascending: true });
+
+            const contenedor = document.getElementById('listaSucursal');
+            if (!data || data.length === 0) {
+                contenedor.innerHTML = `<p class="text-xs text-slate-400 italic">No hay pedidos registrados para este filtro.</p>`;
+                return;
+            }
+
+            contenedor.innerHTML = data.map(p => `
+                <div class="p-3 border rounded-lg text-xs bg-slate-50 flex justify-between items-center gap-2">
+                    <div>
+                        <div class="font-bold text-blue-900">Venta${p.correlativo}</div>
+                        <div class="text-slate-700 mt-0.5">Tratamiento: <b>${p.tratamiento}</b></div>
+                        <div class="text-slate-500 font-mono">
+                            ${p.od ? `OD: Esf ${fmtEsf(p.od.esf)} / Cil ${fmt(p.od.cil)} ` : ''}
+                            ${p.oi ? `| OI: Esf ${fmtEsf(p.oi.esf)} / Cil ${fmt(p.oi.cil)}` : ''}
+                        </div>
+                    </div>
+                    ${esListaActiva ? `
+                    <div class="flex gap-1 no-print shrink-0">
+                        <button onclick="editarPedido('${p.id}')" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Editar</button>
+                        <button onclick="eliminarPedido('${p.id}')" class="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Eliminar</button>
+                    </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // --- PANEL ADMIN (PUNTO ÓPTICO / CENTRAL) ---
+        function cambiarTabAdmin(tab) {
+            tabActivaAdmin = tab;
+            ['stock', 'compras', 'exactas', 'agotados', 'faltantes'].forEach(t => {
+                const panel = document.getElementById(`panel${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (panel) panel.classList.add('hidden');
+                if (btn) btn.className = btn.className.replace('bg-blue-900 text-white', 'bg-slate-200 text-slate-700') + (btn.className.includes('bg-slate-200') ? '' : ' bg-slate-200 text-slate-700');
+            });
+            document.querySelectorAll('[id^="tab"]').forEach(btn => {
+                if (!btn.classList.contains('hidden')) {
+                    btn.className = "px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg" + (btn.id === 'tabFaltantes' && perfilActual !== 'central' ? ' hidden' : '');
+                }
+            });
+            const activePanel = document.getElementById(`panel${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+            const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+            if (activePanel) activePanel.classList.remove('hidden');
+            if (activeBtn) activeBtn.className = "px-3 py-1.5 bg-blue-900 text-white text-xs font-bold rounded-lg";
+            cargarAdmin();
+        }
+
+        function numEq(a, b) {
+            if (a === null || a === undefined || b === null || b === undefined) return false;
+            return Math.abs(parseFloat(a) - parseFloat(b)) < 0.001;
+        }
+
+        function ojoEstaAgotado(tratamiento, ojo, listaAgotados) {
+            if (!ojo) return false;
+            return listaAgotados.some(ag => {
+                if (ag.tratamiento !== tratamiento) return false;
+                if (ag.tipo === 'material') return true;
+                return numEq(ag.esf, ojo.esf) && numEq(ag.cil, ojo.cil);
+            });
+        }
+
+        async function cargarAdmin() {
+            const turnoFiltro = document.getElementById('filtroTurnoAdmin').value;
+            const fechaFiltro = document.getElementById('filtroFechaAdmin').value;
+
+            if (perfilActual === 'bodega') {
+                document.getElementById('printHeaderEmpresa').innerText = '';
+                document.getElementById('printHeaderArea').innerText = 'Punto Óptico';
+            } else {
+                document.getElementById('printHeaderEmpresa').innerText = 'INVERSIONES DEL MAR';
+                document.getElementById('printHeaderArea').innerText = 'Oficina Central';
+            }
+            document.getElementById('printHeaderInfoAdmin').innerText = `${turnoFiltro} — ${formatoFechaLegible(fechaFiltro)}`;
+
+            const { data: pedidos } = await _supabase.from('pedidos').select('*')
+                .eq('turno', turnoFiltro).eq('fecha', fechaFiltro)
+                .order('sucursal', { ascending: true }).order('correlativo', { ascending: true });
+            const { data: agotados } = await _supabase.from('agotados').select('*');
+            const { data: faltantes } = await _supabase.from('faltantes_central').select('*')
+                .eq('fecha', fechaFiltro).eq('turno', turnoFiltro).order('creado_en', { ascending: false });
+
+            const listaAgotados = agotados || [];
+            const listaFaltantes = faltantes || [];
+            const filasStock = [];
+            const filasCompra = [];
+
+            (pedidos || []).forEach(p => {
+                if (p.od) {
+                    const agotado = ojoEstaAgotado(p.tratamiento, p.od, listaAgotados);
+                    (agotado ? filasCompra : filasStock).push({ tratamiento: p.tratamiento, esf: p.od.esf, cil: p.od.cil });
+                }
+                if (p.oi) {
+                    const agotado = ojoEstaAgotado(p.tratamiento, p.oi, listaAgotados);
+                    (agotado ? filasCompra : filasStock).push({ tratamiento: p.tratamiento, esf: p.oi.esf, cil: p.oi.cil });
+                }
+            });
+
+            // Los faltantes registrados en Oficina Central también entran al cruce con
+            // Cristales Agotados, para que caigan en Stock Punto o Compras Externas según corresponda.
+            listaFaltantes.forEach(f => {
+                if (f.od) {
+                    const agotado = ojoEstaAgotado(f.tratamiento, f.od, listaAgotados);
+                    (agotado ? filasCompra : filasStock).push({ tratamiento: f.tratamiento, esf: f.od.esf, cil: f.od.cil });
+                }
+                if (f.oi) {
+                    const agotado = ojoEstaAgotado(f.tratamiento, f.oi, listaAgotados);
+                    (agotado ? filasCompra : filasStock).push({ tratamiento: f.tratamiento, esf: f.oi.esf, cil: f.oi.cil });
+                }
+            });
+
+            renderAgrupado('panelStock', filasStock, 'No hay cristales en stock para esta lista.');
+            renderAgrupado('panelCompras', filasCompra, 'No hay compras externas pendientes.');
+
+            const sucursalExacta = document.getElementById('selectSucursalExacta').value;
+            const pedidosExactos = (pedidos || []).filter(p => p.sucursal === sucursalExacta);
+            document.getElementById('listaExactasSucursal').innerHTML = pedidosExactos.length === 0
+                ? `<p class="text-xs text-slate-400 italic">No hay registros para ${sucursalExacta} en esta lista.</p>`
+                : pedidosExactos.map(p => renderPedidoCard(p)).join('');
+
+            document.getElementById('listaAgotadosActivos').innerHTML = listaAgotados.length === 0
+                ? '<p class="text-xs text-slate-400 italic">No hay cristales marcados como agotados.</p>'
+                : listaAgotados.map(ag => `
+                    <div class="p-2 border rounded text-xs bg-red-50 border-red-200 flex justify-between items-center gap-2">
+                        <span><b>${ag.tratamiento}</b>${ag.tipo === 'dioptria' ? ` — Esf ${fmtEsf(ag.esf)} / Cil ${fmt(ag.cil)}` : ' — Material completo'}</span>
+                        <button onclick="eliminarAgotado(${ag.id})" class="no-print bg-emerald-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shrink-0">Reponer</button>
+                    </div>
+                `).join('');
+
+            if (perfilActual === 'central') {
+                renderFaltantesCentral(listaFaltantes);
+            }
+        }
+
+        // Agrupa filas {tratamiento, esf, cil} por tratamiento y por combinación exacta de dioptría,
+        // mostrando la cantidad total (sin mostrar sucursal, venta ni ojo).
+        function agruparYContar(filas) {
+            const mapa = {};
+            filas.forEach(f => {
+                const key = `${f.tratamiento}|${Number(f.esf).toFixed(2)}|${Number(f.cil).toFixed(2)}`;
+                if (!mapa[key]) mapa[key] = { tratamiento: f.tratamiento, esf: f.esf, cil: f.cil, cantidad: 0 };
+                mapa[key].cantidad++;
+            });
+            return Object.values(mapa);
+        }
+
+        function renderAgrupado(contenedorId, filas, mensajeVacio) {
+            const el = document.getElementById(contenedorId);
+            if (!filas.length) { el.innerHTML = `<p class="text-xs text-slate-400 italic">${mensajeVacio}</p>`; return; }
+
+            const agrupado = agruparYContar(filas);
+            const porTratamiento = {};
+            agrupado.forEach(g => {
+                porTratamiento[g.tratamiento] = porTratamiento[g.tratamiento] || [];
+                porTratamiento[g.tratamiento].push(g);
+            });
+
+            const ordenTrat = TRATAMIENTOS_ORDEN.filter(t => porTratamiento[t]);
+            Object.keys(porTratamiento).forEach(t => { if (!ordenTrat.includes(t)) ordenTrat.push(t); });
+
+            el.innerHTML = `
+            <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                ${ordenTrat.map(trat => {
+                    const items = porTratamiento[trat].sort((a, b) => (a.esf - b.esf) || (a.cil - b.cil));
+                    return `
+                    <div class="border border-slate-300 rounded-lg overflow-hidden self-start">
+                        <div class="text-xs font-bold text-white bg-blue-900 px-2 py-1.5">${trat}</div>
+                        <div>
+                            ${items.map((it, i) => `
+                                <div class="flex items-baseline gap-1.5 text-xs px-2 py-1.5 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-b border-slate-200 last:border-b-0">
+                                    <span class="font-bold text-blue-900 shrink-0">(${it.cantidad})</span>
+                                    <span>Esf ${fmtEsf(it.esf)} / Cil ${fmt(it.cil)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+        }
+
+        function renderPedidoCard(p) {
+            const detalles = [];
+            if (p.od) detalles.push(`OD: Esf ${fmtEsf(p.od.esf)} / Cil ${fmt(p.od.cil)}`);
+            if (p.oi) detalles.push(`OI: Esf ${fmtEsf(p.oi.esf)} / Cil ${fmt(p.oi.cil)}`);
+            return `
+                <div class="p-3 border rounded-lg text-xs bg-slate-50 flex justify-between items-center">
+                    <div>
+                        <span class="font-bold text-blue-900">[${p.sucursal}] Venta${p.correlativo}</span>
+                        <div class="text-slate-700 mt-0.5">Tratamiento: <b>${p.tratamiento}</b></div>
+                        <div class="text-slate-500 font-mono">${detalles.join(' | ')}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleCamposAgotado() {
+            const tipo = document.getElementById('agotado_tipo').value;
+            document.getElementById('agotado_campos_dioptria').classList.toggle('hidden', tipo === 'material');
+        }
+
+        async function registrarAgotado() {
+            const tipo = document.getElementById('agotado_tipo').value;
+            const tratamiento = document.getElementById('agotado_tratamiento').value;
+            const esf = document.getElementById('agotado_esf').value.trim();
+            const cil = document.getElementById('agotado_cil').value.trim();
+
+            if (tipo === 'dioptria' && (!esf || !cil)) {
+                alert("Completa Esf y Cil para marcar una dioptría específica.");
+                return;
+            }
+
+            const datos = {
+                tipo, tratamiento,
+                esf: tipo === 'dioptria' ? parseFloat(esf) : null,
+                cil: tipo === 'dioptria' ? parseFloat(cil) : null
+            };
+
+            const { error } = await _supabase.from('agotados').insert([datos]);
+            if (error) { alert("Error: " + error.message); return; }
+            document.getElementById('agotado_esf').value = '';
+            document.getElementById('agotado_cil').value = '';
+            cargarAdmin();
+        }
+
+        async function eliminarAgotado(id) {
+            if (!confirm('¿Quitar esta marca de agotado (volvió a haber stock)?')) return;
+            const { error } = await _supabase.from('agotados').delete().eq('id', id);
+            if (!error) cargarAdmin();
+        }
+
+        // --- FALTANTES EN OFICINA CENTRAL ---
+        async function registrarFaltanteCentral() {
+            const tratamiento = document.getElementById('faltante_tratamiento').value;
+            const esf_od = document.getElementById('faltante_esf_od').value.trim();
+            const cil_od = document.getElementById('faltante_cil_od').value.trim();
+            const esf_oi = document.getElementById('faltante_esf_oi').value.trim();
+            const cil_oi = document.getElementById('faltante_cil_oi').value.trim();
+            const odTiene = esf_od !== '' || cil_od !== '';
+            const oiTiene = esf_oi !== '' || cil_oi !== '';
+
+            if (!odTiene && !oiTiene) { alert('Ingresa al menos un valor para OD o OI.'); return; }
+
+            const { turno, fecha } = { turno: document.getElementById('filtroTurnoAdmin').value, fecha: document.getElementById('filtroFechaAdmin').value };
+
+            const datos = {
+                tratamiento,
+                od: odTiene ? { esf: parseFloat(esf_od || '0'), cil: parseFloat(cil_od || '0') } : null,
+                oi: oiTiene ? { esf: parseFloat(esf_oi || '0'), cil: parseFloat(cil_oi || '0') } : null,
+                fecha, turno
+            };
+
+            const { error } = await _supabase.from('faltantes_central').insert([datos]);
+            if (error) { alert('Error: ' + error.message); return; }
+
+            document.getElementById('faltante_esf_od').value = '';
+            document.getElementById('faltante_cil_od').value = '';
+            document.getElementById('faltante_esf_oi').value = '';
+            document.getElementById('faltante_cil_oi').value = '';
+            cargarAdmin();
+        }
+
+        function renderFaltantesCentral(listaFaltantes) {
+            const el = document.getElementById('listaFaltantesActivos');
+            if (!el) return;
+            if (!listaFaltantes.length) { el.innerHTML = '<p class="text-xs text-slate-400 italic">No hay faltantes reportados en esta lista.</p>'; return; }
+            el.innerHTML = listaFaltantes.map(f => {
+                const det = [];
+                if (f.od) det.push(`OD: Esf ${fmtEsf(f.od.esf)} / Cil ${fmt(f.od.cil)}`);
+                if (f.oi) det.push(`OI: Esf ${fmtEsf(f.oi.esf)} / Cil ${fmt(f.oi.cil)}`);
+                return `
+                <div class="p-2 border rounded text-xs bg-amber-50 border-amber-200 flex justify-between items-center gap-2">
+                    <span><b>${f.tratamiento}</b> — ${det.join(' | ')}</span>
+                    <button onclick="eliminarFaltanteCentral(${f.id})" class="no-print bg-slate-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shrink-0">Quitar</button>
+                </div>`;
+            }).join('');
+        }
+
+        async function eliminarFaltanteCentral(id) {
+            if (!confirm('¿Quitar este faltante de la lista?')) return;
+            await _supabase.from('faltantes_central').delete().eq('id', id);
+            cargarAdmin();
+        }
+    </script>
+</body>
+
+</html>
