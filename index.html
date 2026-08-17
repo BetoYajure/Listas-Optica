@@ -87,6 +87,11 @@
                         </div>
                     </div>
                 </div>
+                <div id="campoEjeTransp" class="hidden">
+                    <label class="block text-[10px] text-slate-500 mb-0.5">Eje (°) — solo Oficina Central</label>
+                    <input type="number" min="0" max="180" id="t_eje" placeholder="10°" oninput="calcularTranspFlotante()"
+                        class="w-full p-2 border rounded text-sm">
+                </div>
                 <div id="t_resultado" class="text-sm font-mono text-slate-700 bg-slate-50 p-2 rounded text-center">Ingresa valores...
                 </div>
                 <div class="grid grid-cols-3 gap-1.5 pt-1">
@@ -165,6 +170,9 @@
                             </div>
                         </div>
                     </div>
+
+                    <button type="button" onclick="copiarODaOI()"
+                        class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs py-1.5 rounded">⬇️ Copiar OD a OI</button>
 
                     <!-- OJO IZQUIERDO -->
                     <div class="p-2.5 bg-slate-50 border rounded-lg">
@@ -547,29 +555,38 @@
 
         // --- LÓGICA DE TRANSPOSICIÓN (MODAL) ---
         function abrirModalTransposicion() {
+            document.getElementById('campoEjeTransp').classList.toggle('hidden', perfilActual !== 'central');
             document.getElementById('modalTransposicion').classList.remove('hidden');
         }
         function cerrarModalTransposicion() {
             document.getElementById('modalTransposicion').classList.add('hidden');
         }
 
-        function calcularResultadoTransp(esfStr, cilStr) {
+        function calcularResultadoTransp(esfStr, cilStr, ejeStr) {
             const es = parseFloat(esfStr) || 0;
             const ci = parseFloat(cilStr) || 0;
             if (!ci) return null;
             const ne = es + ci;
             const nc = -Math.abs(ci);
-            return { esf: ne, cil: nc };
+            const resultado = { esf: ne, cil: nc };
+            if (perfilActual === 'central' && ejeStr !== undefined && ejeStr !== '') {
+                const ej = parseInt(ejeStr) || 0;
+                let nEj = (ej + 90) % 180;
+                if (nEj === 0) nEj = 180;
+                resultado.eje = nEj;
+            }
+            return resultado;
         }
 
         function calcularTranspFlotante() {
             const es = document.getElementById('t_esf').value;
             const ci = document.getElementById('t_cil').value;
-            const r = calcularResultadoTransp(es, ci);
+            const ej = perfilActual === 'central' ? document.getElementById('t_eje').value : undefined;
+            const r = calcularResultadoTransp(es, ci, ej);
             const resEl = document.getElementById('t_resultado');
 
             if (r) {
-                resEl.innerText = `${r.esf > 0 ? '+' : ''}${r.esf.toFixed(2)} / ${r.cil.toFixed(2)}`;
+                resEl.innerText = `${r.esf > 0 ? '+' : ''}${r.esf.toFixed(2)} / ${r.cil.toFixed(2)}${r.eje ? ' x ' + r.eje + '°' : ''}`;
                 const mostrarBotones = (perfilActual !== 'bodega' && perfilActual !== 'central');
                 document.getElementById('btnAplicarOd').classList.toggle('hidden', !mostrarBotones);
                 document.getElementById('btnAplicarOi').classList.toggle('hidden', !mostrarBotones);
@@ -602,6 +619,7 @@
         function limpiarTransposicion() {
             document.getElementById('t_esf').value = '';
             document.getElementById('t_cil').value = '';
+            document.getElementById('t_eje').value = '';
             document.getElementById('t_resultado').innerText = 'Ingresa valores...';
             document.getElementById('btnAplicarOd').classList.add('hidden');
             document.getElementById('btnAplicarOi').classList.add('hidden');
@@ -624,6 +642,11 @@
                 btn.innerText = "📂 Ver Historial (7 días)";
             }
             cargarSucursal();
+        }
+
+        function copiarODaOI() {
+            document.getElementById('esf_oi').value = document.getElementById('esf_od').value;
+            document.getElementById('cil_oi').value = document.getElementById('cil_od').value;
         }
 
         async function guardarPedido(e) {
