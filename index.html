@@ -145,6 +145,7 @@
                             <option value="Foto Lila">Foto Lila</option>
                             <option value="Blanco Para Tinte">Blanco Para Tinte</option>
                             <option value="Policarbonato">Policarbonato</option>
+                            <option value="AR 1.56">AR 1.56</option>
                         </select>
                     </div>
 
@@ -321,6 +322,7 @@
                             <option value="Foto Lila">Foto Lila</option>
                             <option value="Blanco Para Tinte">Blanco Para Tinte</option>
                             <option value="Policarbonato">Policarbonato</option>
+                            <option value="AR 1.56">AR 1.56</option>
                         </select>
                         <div id="agotado_campos_dioptria" class="grid grid-cols-2 gap-2">
                             <div>
@@ -363,6 +365,7 @@
                         <option value="Foto Lila">Foto Lila</option>
                         <option value="Blanco Para Tinte">Blanco Para Tinte</option>
                         <option value="Policarbonato">Policarbonato</option>
+                        <option value="AR 1.56">AR 1.56</option>
                     </select>
                     <div class="grid grid-cols-2 gap-2 mb-1">
                         <div>
@@ -551,7 +554,7 @@
             return (num > 0 ? '+' : '') + num.toFixed(2);
         }
 
-        const TRATAMIENTOS_ORDEN = ['Blue Cut', 'Capa', 'Foto Gris', 'Foto Cafe', 'Foto Lila', 'Blanco Para Tinte', 'Policarbonato'];
+        const TRATAMIENTOS_ORDEN = ['Blue Cut', 'Capa', 'Foto Gris', 'Foto Cafe', 'Foto Lila', 'Blanco Para Tinte', 'Policarbonato', 'AR 1.56'];
 
         // --- LÓGICA DE TRANSPOSICIÓN (MODAL) ---
         function abrirModalTransposicion() {
@@ -801,6 +804,26 @@
             cargarAdmin();
         }
 
+        // Orden de la lista de Cristales Agotados: primero "Material completo" (agrupado por
+        // tratamiento), luego dioptrías específicas agrupadas por tratamiento y ordenadas por
+        // esfera/cilindro dentro de cada tratamiento.
+        function ordenarAgotados(lista) {
+            return [...lista].sort((a, b) => {
+                if (a.tipo !== b.tipo) return a.tipo === 'material' ? -1 : 1;
+                const posA = TRATAMIENTOS_ORDEN.indexOf(a.tratamiento);
+                const posB = TRATAMIENTOS_ORDEN.indexOf(b.tratamiento);
+                const idxA = posA === -1 ? 999 : posA;
+                const idxB = posB === -1 ? 999 : posB;
+                if (idxA !== idxB) return idxA - idxB;
+                if (a.tipo === 'dioptria') {
+                    const esfDiff = (parseFloat(a.esf) || 0) - (parseFloat(b.esf) || 0);
+                    if (esfDiff !== 0) return esfDiff;
+                    return (parseFloat(a.cil) || 0) - (parseFloat(b.cil) || 0);
+                }
+                return 0;
+            });
+        }
+
         function numEq(a, b) {
             if (a === null || a === undefined || b === null || b === undefined) return false;
             return Math.abs(parseFloat(a) - parseFloat(b)) < 0.001;
@@ -873,9 +896,10 @@
                 ? `<p class="text-xs text-slate-400 italic">No hay registros para ${sucursalExacta} en esta lista.</p>`
                 : pedidosExactos.map(p => renderPedidoCard(p)).join('');
 
-            document.getElementById('listaAgotadosActivos').innerHTML = listaAgotados.length === 0
+            const agotadosOrdenados = ordenarAgotados(listaAgotados);
+            document.getElementById('listaAgotadosActivos').innerHTML = agotadosOrdenados.length === 0
                 ? '<p class="text-xs text-slate-400 italic">No hay cristales marcados como agotados.</p>'
-                : listaAgotados.map(ag => `
+                : agotadosOrdenados.map(ag => `
                     <div class="p-2 border rounded text-xs bg-red-50 border-red-200 flex justify-between items-center gap-2">
                         <span><b>${ag.tratamiento}</b>${ag.tipo === 'dioptria' ? ` — Esf ${fmtEsf(ag.esf)} / Cil ${fmt(ag.cil)}` : ' — Material completo'}</span>
                         <button onclick="eliminarAgotado(${ag.id})" class="no-print bg-emerald-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shrink-0">Reponer</button>
