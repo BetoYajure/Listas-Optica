@@ -106,6 +106,43 @@
         </div>
     </div>
 
+    <!-- MODAL CRISTAL DE CERCA (ADICIÓN) -->
+    <div id="modalAdicion"
+        class="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-300 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-bold text-purple-900">➕ Cristal de Cerca (Adición)</span>
+                <button onclick="cerrarModalAdicion()"
+                    class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">✕</button>
+            </div>
+            <p id="adicion_base_info" class="text-[11px] text-slate-500 mb-3 bg-slate-50 p-2 rounded"></p>
+            <div class="mb-2">
+                <label class="block text-[10px] text-slate-500 mb-0.5">Tratamiento del cristal de cerca</label>
+                <select id="adicion_tratamiento" class="w-full p-2 border rounded text-sm bg-white">
+                    <option value="Blue Cut">Blue Cut</option>
+                    <option value="Capa">Capa</option>
+                    <option value="Foto Gris">Foto Gris</option>
+                    <option value="Foto Cafe">Foto Café</option>
+                    <option value="Foto Lila">Foto Lila</option>
+                    <option value="Blanco Para Tinte">Blanco Para Tinte</option>
+                    <option value="Policarbonato">Policarbonato</option>
+                    <option value="AR 1.56">AR 1.56</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] text-slate-500 mb-0.5">Adición (+)</label>
+                <div class="flex items-center">
+                    <button type="button" onclick="pasoAdicion(-0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-l text-xs font-bold">-</button>
+                    <input type="text" id="adicion_valor" placeholder="0.00" oninput="forzarPositivo('adicion_valor'); calcularAdicion()" class="w-full text-center p-2 border-t border-b text-sm">
+                    <button type="button" onclick="pasoAdicion(0.25)" class="bg-slate-200 hover:bg-slate-300 px-2 py-2 rounded-r text-xs font-bold">+</button>
+                </div>
+            </div>
+            <div id="adicion_resultado" class="text-xs font-mono text-slate-700 bg-slate-50 p-2 rounded mt-2 leading-relaxed">Ingresa la adición...</div>
+            <button type="button" onclick="agregarCristalCerca()" id="btnAgregarCerca" disabled
+                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 rounded-lg mt-3 disabled:opacity-50 disabled:cursor-not-allowed">Agregar estos cristales a la lista</button>
+        </div>
+    </div>
+
     <!-- CONTENIDO PRINCIPAL -->
     <div id="main-content" class="max-w-6xl mx-auto p-4 hidden">
         <nav class="bg-blue-900 text-white p-4 rounded-xl mb-6 flex flex-wrap justify-between items-center gap-2 shadow-lg no-print">
@@ -197,6 +234,9 @@
                             </div>
                         </div>
                     </div>
+
+                    <button type="button" onclick="abrirModalAdicion('sucursal')"
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 rounded-lg">➕ Agregar Cristal de Cerca (ADD)</button>
 
                     <div class="flex gap-2">
                         <button type="submit" id="btnGuardarPedido"
@@ -403,6 +443,8 @@
                             </div>
                         </div>
                     </div>
+                    <button type="button" onclick="abrirModalAdicion('faltante')"
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 rounded-lg mb-2">➕ Agregar Cristal de Cerca (ADD)</button>
                     <button onclick="registrarFaltanteCentral()"
                         class="w-full bg-amber-600 hover:bg-amber-700 text-white py-1.5 rounded text-xs font-bold">Agregar
                         Faltante</button>
@@ -628,6 +670,118 @@
             document.getElementById('btnAplicarOi').classList.add('hidden');
         }
 
+        // --- CRISTAL DE CERCA (ADICIÓN) ---
+        // origen: 'sucursal' (formulario de pedido) o 'faltante' (Faltantes Central).
+        // La adición solo modifica la esfera; el cilindro se mantiene igual al de lejos.
+        let adicionContexto = null;
+
+        function abrirModalAdicion(origen) {
+            let esfOd, cilOd, esfOi, cilOi, tratamiento;
+            if (origen === 'sucursal') {
+                esfOd = document.getElementById('esf_od').value.trim();
+                cilOd = document.getElementById('cil_od').value.trim();
+                esfOi = document.getElementById('esf_oi').value.trim();
+                cilOi = document.getElementById('cil_oi').value.trim();
+                tratamiento = document.getElementById('tratamiento').value;
+            } else {
+                esfOd = document.getElementById('faltante_esf_od').value.trim();
+                cilOd = document.getElementById('faltante_cil_od').value.trim();
+                esfOi = document.getElementById('faltante_esf_oi').value.trim();
+                cilOi = document.getElementById('faltante_cil_oi').value.trim();
+                tratamiento = document.getElementById('faltante_tratamiento').value;
+            }
+
+            const odTiene = esfOd !== '' || cilOd !== '';
+            const oiTiene = esfOi !== '' || cilOi !== '';
+            if (!odTiene && !oiTiene) {
+                alert('Primero ingresa los datos de lejos (OD y/o OI) arriba — la adición se calcula sobre esos valores.');
+                return;
+            }
+
+            adicionContexto = {
+                origen, tratamiento,
+                od: odTiene ? { esf: parseFloat(esfOd || '0'), cil: parseFloat(cilOd || '0') } : null,
+                oi: oiTiene ? { esf: parseFloat(esfOi || '0'), cil: parseFloat(cilOi || '0') } : null
+            };
+
+            const info = [];
+            if (adicionContexto.od) info.push(`OD lejos: Esf ${fmtEsf(adicionContexto.od.esf)} / Cil ${fmt(adicionContexto.od.cil)}`);
+            if (adicionContexto.oi) info.push(`OI lejos: Esf ${fmtEsf(adicionContexto.oi.esf)} / Cil ${fmt(adicionContexto.oi.cil)}`);
+            document.getElementById('adicion_base_info').innerText = info.join('  ·  ');
+            document.getElementById('adicion_tratamiento').value = tratamiento;
+            document.getElementById('adicion_valor').value = '';
+            document.getElementById('adicion_resultado').innerText = 'Ingresa la adición...';
+            document.getElementById('btnAgregarCerca').disabled = true;
+            document.getElementById('modalAdicion').classList.remove('hidden');
+        }
+
+        function cerrarModalAdicion() {
+            document.getElementById('modalAdicion').classList.add('hidden');
+            adicionContexto = null;
+        }
+
+        function pasoAdicion(delta) {
+            paso('adicion_valor', delta, 'positivo');
+            calcularAdicion();
+        }
+
+        function calcularAdicion() {
+            if (!adicionContexto) return;
+            const add = parseFloat(document.getElementById('adicion_valor').value);
+            const resEl = document.getElementById('adicion_resultado');
+            const btn = document.getElementById('btnAgregarCerca');
+
+            if (isNaN(add) || add <= 0) {
+                resEl.innerText = 'Ingresa la adición...';
+                btn.disabled = true;
+                return;
+            }
+
+            const partes = [];
+            if (adicionContexto.od) partes.push(`OD cerca: Esf ${fmtEsf(adicionContexto.od.esf + add)} / Cil ${fmt(adicionContexto.od.cil)}`);
+            if (adicionContexto.oi) partes.push(`OI cerca: Esf ${fmtEsf(adicionContexto.oi.esf + add)} / Cil ${fmt(adicionContexto.oi.cil)}`);
+            resEl.innerHTML = partes.join('<br>');
+            btn.disabled = false;
+        }
+
+        async function agregarCristalCerca() {
+            if (!adicionContexto) return;
+            const add = parseFloat(document.getElementById('adicion_valor').value);
+            if (isNaN(add) || add <= 0) return;
+
+            const tratamientoCerca = document.getElementById('adicion_tratamiento').value;
+            const od = adicionContexto.od ? { esf: adicionContexto.od.esf + add, cil: adicionContexto.od.cil } : null;
+            const oi = adicionContexto.oi ? { esf: adicionContexto.oi.esf + add, cil: adicionContexto.oi.cil } : null;
+
+            if (adicionContexto.origen === 'sucursal') {
+                const tInfo = obtenerTurnoActual();
+                const { count } = await _supabase.from('pedidos')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('sucursal', perfilActual).eq('fecha', tInfo.fecha).eq('turno', tInfo.turno);
+                const correlativoNum = (count || 0) + 1;
+
+                const { error } = await _supabase.from('pedidos').insert([{
+                    sucursal: perfilActual, fecha: tInfo.fecha, turno: tInfo.turno,
+                    correlativo: correlativoNum, tratamiento: tratamientoCerca, od, oi
+                }]);
+                if (error) { alert('Error al guardar: ' + error.message); return; }
+
+                cerrarModalAdicion();
+                cargarSucursal();
+            } else {
+                const turno = document.getElementById('filtroTurnoAdmin').value;
+                const fecha = document.getElementById('filtroFechaAdmin').value;
+
+                const { error } = await _supabase.from('faltantes_central').insert([{
+                    tratamiento: tratamientoCerca, od, oi, fecha, turno
+                }]);
+                if (error) { alert('Error al guardar: ' + error.message); return; }
+
+                cerrarModalAdicion();
+                cargarAdmin();
+            }
+        }
+
         // --- SUCURSAL: GUARDAR, EDITAR, ELIMINAR, HISTORIAL ---
         function toggleHistorialSucursal() {
             modoHistorialSucursal = !modoHistorialSucursal;
@@ -818,7 +972,7 @@
                 if (a.tipo === 'dioptria') {
                     const esfDiff = (parseFloat(a.esf) || 0) - (parseFloat(b.esf) || 0);
                     if (esfDiff !== 0) return esfDiff;
-                    return (parseFloat(a.cil) || 0) - (parseFloat(b.cil) || 0);
+                    return (parseFloat(b.cil) || 0) - (parseFloat(a.cil) || 0);
                 }
                 return 0;
             });
